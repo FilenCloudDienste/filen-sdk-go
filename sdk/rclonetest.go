@@ -20,8 +20,15 @@ func main() {
 	password := "W74TTbTbJ2bE45M"
 	fmt.Printf("Credentials: %s, %s\n", email, password)
 
-	filen.Login(email, password)
-	filen.Readdir()
+	err := filen.Login(email, password)
+	if err != nil {
+		panic(err)
+	}
+	directoryContent, err := filen.Readdir()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Directory Contents: %#v\n", directoryContent)
 }
 
 func Input(prompt, def string) string {

@@ -18,7 +18,7 @@ func New() *Filen {
 	}
 }
 
-func (filen *Filen) Login(email, password string) {
+func (filen *Filen) Login(email, password string) error {
 	// fetch salt
 	authInfo, err := filen.client.GetAuthInfo(email)
 	if err != nil {
@@ -35,18 +35,24 @@ func (filen *Filen) Login(email, password string) {
 	// login and get keys
 	keys, err := filen.client.Login(email, password)
 	if err != nil {
-		panic(err)
+		return err
 	}
-	fmt.Printf("API Key: %s\n", keys.ApiKey)
 	filen.client.APIKey = keys.ApiKey
+	return nil
 }
 
-func (filen *Filen) Readdir() error {
+func (filen *Filen) Readdir() (*client.DirectoryContent, error) {
 	// fetch base folder uuid
 	userBaseFolder, err := filen.client.GetUserBaseFolder()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	fmt.Println("baseFolderUUID:", userBaseFolder.UUID)
-	return nil
+
+	// fetch directory content
+	directoryContent, err := filen.client.GetDirectoryContent(userBaseFolder.UUID)
+	if err != nil {
+		return nil, err
+	}
+
+	return directoryContent, nil
 }

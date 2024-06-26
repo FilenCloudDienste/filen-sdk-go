@@ -48,3 +48,40 @@ func (client *Client) GetUserBaseFolder() (*UserBaseFolder, error) {
 	_, err := client.request("GET", "/v3/user/baseFolder", nil, userBaseFolder)
 	return userBaseFolder, err
 }
+
+// POST /v3/dir/content
+
+type DirectoryContent struct {
+	Uploads []struct {
+		UUID      string `json:"uuid"`
+		Metadata  string `json:"metadata"`
+		Rm        string `json:"rm"`
+		Timestamp int    `json:"timestamp"`
+		Chunks    int    `json:"chunks"`
+		Size      int    `json:"size"`
+		Bucket    string `json:"bucket"`
+		Region    string `json:"region"`
+		Parent    string `json:"parent"`
+		Version   int    `json:"version"`
+		Favorited int    `json:"favorited"`
+	} `json:"uploads"`
+	Folders []struct {
+		UUID      string      `json:"uuid"`
+		Name      string      `json:"name"`
+		Parent    string      `json:"parent"`
+		Color     interface{} `json:"color"`
+		Timestamp int         `json:"timestamp"`
+		Favorited int         `json:"favorited"`
+		IsSync    int         `json:"is_sync"`
+		IsDefault int         `json:"is_default"`
+	} `json:"folders"`
+}
+
+func (client *Client) GetDirectoryContent(uuid string) (*DirectoryContent, error) {
+	request := struct {
+		UUID string `json:"uuid"`
+	}{uuid}
+	directoryContent := &DirectoryContent{}
+	_, err := client.request("POST", "/v3/dir/content", request, directoryContent)
+	return directoryContent, err
+}
