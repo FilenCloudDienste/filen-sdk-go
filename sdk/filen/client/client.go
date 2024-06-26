@@ -18,16 +18,16 @@ type Client struct {
 	APIKey string
 }
 
-func (client *Client) Request(method string, path string, body any, response *apiResponse[AuthInfo]) error {
+func (client *Client) request(method string, path string, body any, data any) (*apiResponse, error) {
 	marshalled, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req, err := http.NewRequest(method, apiRoot+path, bytes.NewReader(marshalled))
 	if err != nil {
 		log.Fatalf("Cannot build request: %s", err)
-		return err
+		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -39,15 +39,16 @@ func (client *Client) Request(method string, path string, body any, response *ap
 	res, err := httpClient.Do(req)
 	if err != nil {
 		log.Fatalf("Cannot send request: %s", err)
-		return err
+		return nil, err
 	}
 
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		log.Fatalf("Cannot read response body: %s", err)
-		return err
+		return nil, err
 	}
 
+	response := apiResponse{}
 	err = json.Unmarshal(resBody, &response)
 	if err != nil {
 		var nakedResponse nakedApiResponse
@@ -58,7 +59,13 @@ func (client *Client) Request(method string, path string, body any, response *ap
 		log.Fatalf("Response contains no data: %v", nakedResponse)
 	}
 
-	return nil
+	err = json.Unmarshal(response.Data, data)
+	if err != nil {
+		log.Fatalf("Cannot unmarshal response data: %s, %s", response.Data, err)
+		return nil, err
+	}
+
+	return &response, nil
 }
 
 type nakedApiResponse struct {
@@ -67,14 +74,14 @@ type nakedApiResponse struct {
 	Code    string `json:"code"`
 }
 
-type apiResponse[T any] struct {
-	Status  bool   `json:"status"`
-	Message string `json:"message"`
-	Code    string `json:"code"`
-	Data    T      `json:"data"`
+type apiResponse struct {
+	Status  bool            `json:"status"`
+	Message string          `json:"message"`
+	Code    string          `json:"code"`
+	Data    json.RawMessage `json:"data"`
 }
 
-func (res *apiResponse[T]) String() string {
+func (res *apiResponse) String() string {
 	return fmt.Sprintf("ApiResponse{status: %t, message: %s, code: %s, data: %s}", res.Status, res.Message, res.Code, res.Data)
 }
 
@@ -87,13 +94,13 @@ func (authInfo AuthInfo) String() string {
 	return fmt.Sprintf("AuthInfo{auth version: %d, salt: %s}", authInfo.AuthVersion, authInfo.Salt)
 }
 
-func (client *Client) GetAuthInfo(email string) (authInfo *AuthInfo, err error) {
+func (client *Client) GetAuthInfo(email string) (*AuthInfo, error) {
 	request := struct {
 		Email string `json:"email"`
 	}{email}
-	var response apiResponse[AuthInfo]
-	err = client.Request("POST", "/v3/auth/info", request, &response)
-	return &response.Data, err
+	authInfo := AuthInfo{}
+	_, err := client.request("POST", "/v3/auth/info", request, &authInfo)
+	return &authInfo, err
 }
 
 /*type LoginKeys struct {
