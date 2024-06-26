@@ -1,8 +1,11 @@
 package filen
 
 import (
+	"crypto/sha512"
+	"encoding/hex"
 	"filen/filen-sdk-go/filen/client"
 	"fmt"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 type Filen struct {
@@ -22,9 +25,7 @@ func (filen *Filen) Login(email, password string) {
 		panic(err)
 	}
 
-	fmt.Println(authInfo)
-
-	/*// compute password as sha512 hash of second half of sha512-PBKDF2 of raw password
+	// compute password as sha512 hash of second half of sha512-PBKDF2 of raw password
 	password = hex.EncodeToString(pbkdf2.Key([]byte(password), []byte(authInfo.Salt), 200000, 512/8, sha512.New))
 	password = password[len(password)/2:]
 	derivedPasswordHash := sha512.New()
@@ -32,14 +33,20 @@ func (filen *Filen) Login(email, password string) {
 	password = fmt.Sprintf("%032x", derivedPasswordHash.Sum(nil))
 
 	// login and get keys
-	keys, err := filen.Login(ctx, email, password)
+	keys, err := filen.client.Login(email, password)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("API Key: %s\n", keys.ApiKey)
-	ctx = context.WithValue(ctx, "apiKey", keys.ApiKey)
+	filen.client.APIKey = keys.ApiKey
+}
 
+func (filen *Filen) Readdir() error {
 	// fetch base folder uuid
-	baseFolderUUID, err := filen.GetUserBaseFolder(ctx)
-	fmt.Println("baseFolderUUID:", baseFolderUUID)*/
+	userBaseFolder, err := filen.client.GetUserBaseFolder()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("baseFolderUUID:", userBaseFolder.UUID)
+	return nil
 }

@@ -14,11 +14,14 @@ var (
 
 func main() {
 	// get credentials
-	email := Input("Email: ", "filentest1@jupiterpi.de")
-	password := Input("Password: ", "W74TTbTbJ2bE45M")
+	//email := Input("Email: ", "filentest1@jupiterpi.de")
+	email := "filentest1@jupiterpi.de"
+	//password := Input("Password: ", "W74TTbTbJ2bE45M")
+	password := "W74TTbTbJ2bE45M"
 	fmt.Printf("Credentials: %s, %s\n", email, password)
 
 	filen.Login(email, password)
+	filen.Readdir()
 }
 
 func Input(prompt, def string) string {
