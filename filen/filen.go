@@ -1,15 +1,16 @@
 package filen
 
 import (
-	"crypto/sha512"
-	"encoding/hex"
 	"filen/filen-sdk-go/filen/client"
+	"filen/filen-sdk-go/filen/crypto"
 	"fmt"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 type Filen struct {
-	client *client.Client
+	client     *client.Client
+	MasterKeys []string
+	PublicKey  string
+	PrivateKey string
 }
 
 func New() *Filen {
@@ -25,19 +26,18 @@ func (filen *Filen) Login(email, password string) error {
 		panic(err)
 	}
 
-	// compute password as sha512 hash of second half of sha512-PBKDF2 of raw password
-	password = hex.EncodeToString(pbkdf2.Key([]byte(password), []byte(authInfo.Salt), 200000, 512/8, sha512.New))
-	password = password[len(password)/2:]
-	derivedPasswordHash := sha512.New()
-	derivedPasswordHash.Write([]byte(password))
-	password = fmt.Sprintf("%032x", derivedPasswordHash.Sum(nil))
+	masterKey, password := crypto.GeneratePasswordAndMasterKey(password, authInfo.Salt)
 
 	// login and get keys
 	keys, err := filen.client.Login(email, password)
 	if err != nil {
 		return err
 	}
-	filen.client.APIKey = keys.ApiKey
+	filen.client.APIKey = keys.APIKey
+	filen.MasterKeys, filen.PublicKey, filen.PrivateKey, err = crypto.UpdateKeys(filen.client, filen.client.APIKey, []string{masterKey})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -53,6 +53,13 @@ func (filen *Filen) Readdir() (*client.DirectoryContent, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	sampleName := directoryContent.Folders[0].Name
+	folderMetadata, err := crypto.DecryptFolderMetadata(filen.MasterKeys, sampleName)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println(folderMetadata.Name)
 
 	return directoryContent, nil
 }

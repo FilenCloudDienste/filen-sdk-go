@@ -24,11 +24,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	directoryContent, err := filen.Readdir()
+	_, err = filen.Readdir()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Directory Contents: %#v\n", directoryContent)
+	//fmt.Printf("Directory Contents: %#v\n", directoryContent)
 }
 
 func Input(prompt, def string) string {

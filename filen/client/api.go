@@ -19,7 +19,7 @@ func (client *Client) GetAuthInfo(email string) (*AuthInfo, error) {
 // POST /v3/login
 
 type LoginKeys struct {
-	ApiKey     string `json:"apiKey"`
+	APIKey     string `json:"apiKey"`
 	MasterKeys string `json:"masterKeys"`
 	PublicKey  string `json:"publicKey"`
 	PrivateKey string `json:"privateKey"`
@@ -84,4 +84,43 @@ func (client *Client) GetDirectoryContent(uuid string) (*DirectoryContent, error
 	directoryContent := &DirectoryContent{}
 	_, err := client.request("POST", "/v3/dir/content", request, directoryContent)
 	return directoryContent, err
+}
+
+// POST /v3/user/masterKeys
+
+type UserMasterKeys struct {
+	Keys string `json:"keys"`
+}
+
+func (client *Client) GetUserMasterKeys(encryptedMasterKeys string) (*UserMasterKeys, error) {
+	request := struct {
+		MasterKeys string `json:"masterKeys"`
+	}{encryptedMasterKeys}
+	userMasterKeys := &UserMasterKeys{}
+	_, err := client.request("POST", "/v3/user/masterKeys", request, userMasterKeys)
+	return userMasterKeys, err
+}
+
+// GET /v3/user/keyPair/info
+
+type UserKeyPairInfo struct {
+	PublicKey  string `json:"publicKey"`
+	PrivateKey string `json:"privateKey"`
+}
+
+func (client *Client) GetUserKeyPairInfo() (*UserKeyPairInfo, error) {
+	userKeyPairInfo := &UserKeyPairInfo{}
+	_, err := client.request("GET", "/v3/user/keyPairInfo", nil, userKeyPairInfo)
+	return userKeyPairInfo, err
+}
+
+// POST /v3/user/keyPair/update
+
+func (client *Client) UpdateUserKeyPair(publicKey string, encryptedPrivateKey string) error {
+	request := struct {
+		PublicKey  string `json:"publicKey"`
+		PrivateKey string `json:"privateKey"`
+	}{publicKey, encryptedPrivateKey}
+	_, err := client.request("POST", "/v3/user/keyPair/update", request, nil)
+	return err
 }
