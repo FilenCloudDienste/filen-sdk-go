@@ -4,8 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha512"
-	"encoding/base64"
-	"encoding/hex"
 	"golang.org/x/crypto/pbkdf2"
 	"math/rand"
 )
@@ -20,30 +18,7 @@ func randString(n int) string {
 	return string(b)
 }
 
-// byte array utility
-
-// encodeHex encodes a byte array as a hex string
-func encodeHex(b []byte) string {
-	return hex.EncodeToString(b)
-}
-
-// encodeBase64 encodes a byte array as a base64-encoded string
-func encodeBase64(b []byte) string {
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-// decodeBase64 decodes a base64-encoded string
-func decodeBase64(s string) ([]byte, error) {
-	bytes, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		return nil, err
-	}
-	return bytes, nil
-}
-
-// cryptographic utility
-
-// runPBKDF2 generates a PBKDF2 (SHA-512) key using
+// runPBKDF2 generates a PBKDF2 (SHA-512) key //TODO
 func runPBKDF2(password string, salt string, iterations int, bitLength int) []byte {
 	return pbkdf2.Key([]byte(password), []byte(salt), iterations, bitLength/8, sha512.New)
 }
@@ -55,9 +30,8 @@ func runSHA521(s string) []byte {
 	return hasher.Sum(nil)
 }
 
-// runAES256GCM generates an AES256-GCM
-// TODO
-func runAES256GCM(key []byte, nonce []byte, ciphertext []byte, additionalData []byte) ([]byte, error) {
+// runAES256GCMDecrypt generates an AES256-GCM
+func runAES256GCMDecrypt(key []byte, nonce []byte, ciphertext []byte, authTag []byte) ([]byte, error) {
 	c, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -67,9 +41,25 @@ func runAES256GCM(key []byte, nonce []byte, ciphertext []byte, additionalData []
 		return nil, err
 	}
 	var result []byte
-	result, err = gcm.Open(result, nonce, ciphertext, additionalData)
+	result, err = gcm.Open(result, nonce, ciphertext, authTag)
 	if err != nil {
 		return nil, err
 	}
+	return result, nil
+}
+
+// runAES256GCMEncrypt generates an AES256-GCM
+func runAES256GCMEncrypt(key []byte, plaintext []byte) ([]byte, error) {
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		return nil, err
+	}
+	nonce := []byte(randString(gcm.NonceSize()))
+	var result []byte
+	result = gcm.Seal(nil, nonce, plaintext, nil)
 	return result, nil
 }

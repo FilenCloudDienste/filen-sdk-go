@@ -24,11 +24,23 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, err = filen.Readdir()
+	baseFolderUUID, err := filen.GetBaseFolderUUID()
 	if err != nil {
 		panic(err)
 	}
-	//fmt.Printf("Directory Contents: %#v\n", directoryContent)
+	files, directories, err := filen.Readdir(baseFolderUUID)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Files:")
+	for _, file := range files {
+		fmt.Printf("%#v\n", file)
+	}
+	fmt.Println("Directories:")
+	for _, directory := range directories {
+		fmt.Printf("%#v\n", directory)
+	}
 }
 
 func Input(prompt, def string) string {
