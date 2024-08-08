@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"filen/filen-sdk-go/filen/crypto"
 	"filen/filen-sdk-go/filen/util"
+	"os"
 	"time"
 )
 
@@ -109,18 +110,58 @@ func (filen *Filen) ReadDirectory(uuid string) ([]*File, []*Directory, error) {
 	return files, directories, nil
 }
 
-func (filen *Filen) ReadFile(file *File) ([]byte, error) {
-	data := make([]byte, 0)
+const (
+	maxConcurrentDownloads = 16
+	maxConcurrentWriters   = 16
+	chunkSize              = 1048576
+)
+
+func (filen *Filen) DownloadFile(file *File, destination *os.File) error {
+	downloadSem := make(chan int, maxConcurrentDownloads)
+	writeSem := make(chan int, maxConcurrentWriters)
+	c := make(chan int)
+	errs := make(chan error)
+
 	for chunk := 0; chunk < file.Chunks; chunk++ {
-		encryptedChunkData, err := filen.client.DownloadFileChunk(file.UUID, file.Region, file.Bucket, chunk)
-		if err != nil {
-			return nil, err
-		}
-		chunkData, err := crypto.DecryptData(encryptedChunkData, file.EncryptionKey)
-		if err != nil {
-			return nil, err
-		}
-		data = append(data, chunkData...)
+		go func() {
+			downloadSem <- 1
+			defer func() { <-downloadSem }()
+
+			encryptedChunkData, err := filen.client.DownloadFileChunk(file.UUID, file.Region, file.Bucket, chunk)
+			if err != nil {
+				errs <- err
+				return
+			}
+			chunkData, err := crypto.DecryptData(encryptedChunkData, file.EncryptionKey)
+			if err != nil {
+				errs <- err
+				return
+			}
+
+			go func() {
+				writeSem <- 1
+				defer func() { <-writeSem }()
+
+				_, err = destination.WriteAt(chunkData, int64(chunk*chunkSize))
+				if err != nil {
+					errs <- err
+					return
+				}
+
+				c <- 1
+			}()
+		}()
 	}
-	return data, nil
+	finished := 0
+	for {
+		select {
+		case <-c:
+			finished++
+			if finished == file.Chunks {
+				return nil
+			}
+		case err := <-errs:
+			return err
+		}
+	}
 }
