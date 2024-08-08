@@ -1,14 +1,12 @@
 package crypto
 
 import (
-	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 func DeriveKeyFromPassword(password string, salt string, iterations int, bitLength int) []byte {
-	return pbkdf2.Key([]byte(password), []byte(salt), iterations, bitLength/8, sha512.New)
+	return runPBKDF2(password, salt, iterations, bitLength)
 }
 
 func GeneratePasswordAndMasterKey(rawPassword string, salt string) (derivedMasterKey string, derivedPassword string) {

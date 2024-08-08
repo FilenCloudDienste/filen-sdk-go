@@ -1,11 +1,11 @@
 package crypto
 
-func EncryptMetadataSymmetrically(metadata string, key string) (SymmetricallyEncryptedString, error) {
+func EncryptMetadata(metadata string, key string) (EncryptedString, error) {
 	derivedKey := DeriveKeyFromPassword(key, key, 1, 256)
 	data := []byte(metadata)
-	result, err := runAES256GCMEncrypt(derivedKey, data)
+	result, err := runAES256GCMEncryption(derivedKey, data)
 	if err != nil {
 		return "", err
 	}
-	return SymmetricallyEncryptedString(result), nil
+	return EncryptedString(result), nil
 }
