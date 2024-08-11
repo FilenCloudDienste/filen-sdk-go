@@ -102,3 +102,23 @@ func (client *Client) GetUserMasterKeys(encryptedMasterKey crypto.EncryptedStrin
 	_, err := client.request("POST", "/v3/user/masterKeys", request, userMasterKeys)
 	return userMasterKeys, err
 }
+
+// POST /v3/upload/done
+
+type UploadDonePayload struct {
+	UUID       string                 `json:"uuid"`
+	Name       crypto.EncryptedString `json:"name"`
+	NameHashed string                 `json:"nameHashed"`
+	Size       crypto.EncryptedString `json:"size"`
+	Chunks     int                    `json:"chunks"`
+	Mime       crypto.EncryptedString `json:"mime"`
+	Rm         string                 `json:"rm"`
+	Metadata   crypto.EncryptedString `json:"metadata"`
+	Version    int                    `json:"version"`
+	UploadKey  string                 `json:"uploadKey"`
+}
+
+func (client *Client) UploadDone(payload UploadDonePayload) error {
+	_, err := client.request("POST", "/v3/upload/done", payload, nil)
+	return err
+}

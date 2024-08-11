@@ -1,10 +1,16 @@
 package filen
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"filen/filen-sdk-go/filen/client"
 	"filen/filen-sdk-go/filen/crypto"
 	"filen/filen-sdk-go/filen/util"
+	"fmt"
+	"github.com/google/uuid"
 	"os"
+	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -164,4 +170,73 @@ func (filen *Filen) DownloadFile(file *File, destination *os.File) error {
 			return err
 		}
 	}
+}
+
+func (filen *Filen) UploadFile(sourcePath string, parentUUID string) error {
+	plaintextData, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	fileUUID := uuid.New().String()
+	key := crypto.GenerateRandomString(32)
+	uploadKey := crypto.GenerateRandomString(32)
+
+	data, err := crypto.EncryptData(plaintextData, key)
+
+	err = filen.client.UploadFileChunk(fileUUID, 0, parentUUID, uploadKey, data)
+	if err != nil {
+		return err
+	}
+
+	name := filepath.Base(sourcePath)
+	nameEncrypted, err := crypto.EncryptMetadata(name, key)
+	if err != nil {
+		return err
+	}
+	nameHashed := hex.EncodeToString(crypto.RunSHA521([]byte(name)))
+	mime, err := crypto.EncryptMetadata("text/plain", key)
+	if err != nil {
+		return err
+	}
+	sizeEncrypted, err := crypto.EncryptMetadata(strconv.Itoa(len(plaintextData)), key)
+	if err != nil {
+		return err
+	}
+
+	metadata := struct {
+		Name         string `json:"name"`
+		Size         int    `json:"size"`
+		Mime         string `json:"mime"`
+		Key          string `json:"key"`
+		LastModified int    `json:"lastModified"`
+		Created      int    `json:"created"`
+	}{name, len(plaintextData), "text/plain", key, int(time.Now().Unix()), int(time.Now().Unix())}
+	metadataStr, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(metadataStr))
+	metadataEncrypted, err := crypto.EncryptMetadata(string(metadataStr), filen.masterKey())
+	if err != nil {
+		return err
+	}
+
+	err = filen.client.UploadDone(client.UploadDonePayload{
+		UUID:       fileUUID,
+		Name:       nameEncrypted,
+		NameHashed: nameHashed,
+		Size:       sizeEncrypted,
+		Chunks:     1,
+		Mime:       mime,
+		Rm:         crypto.GenerateRandomString(32),
+		Metadata:   metadataEncrypted,
+		Version:    2,
+		UploadKey:  uploadKey,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

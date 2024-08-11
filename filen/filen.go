@@ -52,3 +52,8 @@ func (filen *Filen) Login(email, password string) error {
 
 	return nil
 }
+
+// masterKey returns the master key to use for encryption
+func (filen *Filen) masterKey() string {
+	return filen.MasterKeys[len(filen.MasterKeys)-1]
+}

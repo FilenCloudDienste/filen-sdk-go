@@ -2,13 +2,10 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	sdk "filen/filen-sdk-go/filen"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
-	"time"
 )
 
 var (
@@ -18,9 +15,9 @@ var (
 func main() {
 	// get credentials
 	//email := Input("Email: ", "filentest1@jupiterpi.de")
-	email := "filentest1@jupiterpi.de"
+	email := "filentest2@jupiterpi.de"
 	//password := Input("Password: ", "W74TTbTbJ2bE45M")
-	password := "W74TTbTbJ2bE45M"
+	password := "X1QFNYBkf9"
 	fmt.Printf("Credentials: %s, %s\n", email, password)
 
 	WriteSampleFile()
@@ -33,43 +30,48 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	files, directories, err := filen.ReadDirectory(baseFolderUUID)
+	_, _, err = filen.ReadDirectory(baseFolderUUID)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Files:")
+	/*fmt.Println("Files:")
 	for _, file := range files {
 		fmt.Printf("%#v\n", file)
 	}
 	fmt.Println("Directories:")
 	for _, directory := range directories {
 		fmt.Printf("%#v\n", directory)
-	}
+	}*/
 
-	idx := slices.IndexFunc(files, func(file *sdk.File) bool { return file.Name == "lsample.txt" })
+	/*idx := slices.IndexFunc(files, func(file *sdk.File) bool { return file.Name == "lsample.txt" })
 	if idx == -1 {
 		panic(errors.New("file not found"))
 	}
 	file := files[idx]
-	destination, err := os.Create("downloaded/" + file.Name)
+	_, err = os.Create("downloaded/" + file.Name)
 	if err != nil {
 		panic(err)
-	}
+	}*/
 
-	start := time.Now()
+	/*start := time.Now()
 	err = filen.DownloadFile(file, destination)
 	if err != nil {
 		panic(err)
 	}
 	duration := time.Since(start)
-	fmt.Printf("Took %vs", duration.Seconds())
+	fmt.Printf("Took %vs\n", duration.Seconds())*/
 	//fmt.Printf("File: \n\n%s\n\n", content)
 
 	/*err = os.WriteFile("downloaded/"+file.Name, content, 0666)
 	if err != nil {
 		panic(err)
 	}*/
+
+	err = filen.UploadFile("downloaded/uploadfile.txt", baseFolderUUID)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func WriteSampleFile() {
