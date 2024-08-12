@@ -13,8 +13,8 @@ type Filen struct {
 
 	// MasterKeys contains the crypto master keys for the current user. When the user changes
 	// their password, a new master key is appended. For decryption, all master keys are tried
-	// until one works; for decryption, always use the latest master key via [Test].
-	MasterKeys []string
+	// until one works; for decryption, always use the latest master key.
+	MasterKeys [][]byte
 }
 
 // New creates a new Filen and initializes it with the given email and password
@@ -40,7 +40,7 @@ func New(email, password string) (*Filen, error) {
 	filen.client.APIKey = keys.APIKey
 
 	// fetch, encrypt and apply master keys
-	encryptedMasterKey, err := crypto.EncryptMetadata(masterKey, masterKey)
+	encryptedMasterKey, err := crypto.EncryptMetadata(string(masterKey), masterKey)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func New(email, password string) (*Filen, error) {
 		return nil, err
 	}
 	for _, key := range strings.Split(masterKeysStr, "|") {
-		filen.MasterKeys = append(filen.MasterKeys, key)
+		filen.MasterKeys = append(filen.MasterKeys, []byte(key))
 	}
 
 	return filen, nil
@@ -61,6 +61,6 @@ func New(email, password string) (*Filen, error) {
 
 // CurrentMasterKey returns the current master key to use for encryption.
 // Multiple possible master keys exist for decryption, but only the latest one should be used for encryption.
-func (filen *Filen) CurrentMasterKey() string {
+func (filen *Filen) CurrentMasterKey() []byte {
 	return filen.MasterKeys[len(filen.MasterKeys)-1]
 }

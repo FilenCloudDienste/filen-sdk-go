@@ -10,10 +10,8 @@ import (
 
 func main() {
 	// get credentials
-	//email := Input("Email: ", "filentest1@jupiterpi.de")
-	email := "filentest2@jupiterpi.de"
-	//password := Input("Password: ", "W74TTbTbJ2bE45M")
-	password := "X1QFNYBkf9"
+	email := "filentest1@jupiterpi.de"
+	password := "W74TTbTbJ2bE45M"
 	fmt.Printf("Credentials: %s, %s\n", email, password)
 
 	WriteSampleFile()
@@ -26,12 +24,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	_, _, err = filen.ReadDirectory(baseFolderUUID)
+
+	/*files, directories, err := filen.ReadDirectory(baseFolderUUID)
 	if err != nil {
 		panic(err)
 	}
 
-	/*fmt.Println("Files:")
+	fmt.Println("Files:")
 	for _, file := range files {
 		fmt.Printf("%#v\n", file)
 	}

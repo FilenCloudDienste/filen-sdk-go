@@ -21,10 +21,14 @@ func DeriveKeyFromPassword(password string, salt string, iterations int, bitLeng
 	return runPBKDF2(password, salt, iterations, bitLength)
 }
 
+func deriveKey(key []byte) []byte {
+	return DeriveKeyFromPassword(string(key), string(key), 1, 256)
+}
+
 // GeneratePasswordAndMasterKey derives a password and a master key from the raw password (used for login).
-func GeneratePasswordAndMasterKey(rawPassword string, salt string) (derivedMasterKey string, derivedPassword string) {
+func GeneratePasswordAndMasterKey(rawPassword string, salt string) (derivedMasterKey []byte, derivedPassword string) {
 	derivedKey := hex.EncodeToString(DeriveKeyFromPassword(rawPassword, salt, 200000, 512))
-	derivedMasterKey, derivedPassword = derivedKey[:len(derivedKey)/2], derivedKey[len(derivedKey)/2:]
+	derivedMasterKey, derivedPassword = []byte(derivedKey[:len(derivedKey)/2]), derivedKey[len(derivedKey)/2:]
 	derivedPassword = fmt.Sprintf("%032x", RunSHA521([]byte(derivedPassword)))
 	return
 }
@@ -32,10 +36,9 @@ func GeneratePasswordAndMasterKey(rawPassword string, salt string) (derivedMaste
 // encryption
 
 // EncryptMetadata encrypts metadata.
-func EncryptMetadata(metadata string, key string) (EncryptedString, error) {
-	derivedKey := DeriveKeyFromPassword(key, key, 1, 256)
+func EncryptMetadata(metadata string, key []byte) (EncryptedString, error) {
 	nonce := []byte(GenerateRandomString(12))
-	result, err := runAES256GCMEncryption(derivedKey, nonce, []byte(metadata))
+	result, err := runAES256GCMEncryption(deriveKey(key), nonce, []byte(metadata))
 	if err != nil {
 		return "", err
 	}
@@ -44,9 +47,9 @@ func EncryptMetadata(metadata string, key string) (EncryptedString, error) {
 }
 
 // EncryptData encrypts file data.
-func EncryptData(data []byte, key string) ([]byte, error) {
+func EncryptData(data []byte, key []byte) ([]byte, error) {
 	nonce := []byte(GenerateRandomString(12))
-	result, err := runAES256GCMEncryption([]byte(key), nonce, data)
+	result, err := runAES256GCMEncryption(key, nonce, data)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +68,7 @@ func (e *AllKeysFailedError) Error() string {
 }
 
 // DecryptMetadataAllKeys calls [DecryptMetadata] using all provided keys.
-func DecryptMetadataAllKeys(metadata EncryptedString, keys []string) (string, error) {
+func DecryptMetadataAllKeys(metadata EncryptedString, keys [][]byte) (string, error) {
 	errors := make([]error, 0)
 	for _, key := range keys {
 		decrypted, err := DecryptMetadata(metadata, key)
@@ -80,15 +83,14 @@ func DecryptMetadataAllKeys(metadata EncryptedString, keys []string) (string, er
 }
 
 // DecryptMetadata decrypts metadata.
-func DecryptMetadata(metadata EncryptedString, key string) (string, error) {
-	derivedKey := DeriveKeyFromPassword(key, key, 1, 256)
+func DecryptMetadata(metadata EncryptedString, key []byte) (string, error) {
 	nonce := metadata[3:15]
 	encrypted, err := base64.StdEncoding.DecodeString(string(metadata[15:]))
 	if err != nil {
 		return "", err
 	}
 
-	result, err := runAES256GCMDecryption(derivedKey, []byte(nonce), encrypted)
+	result, err := runAES256GCMDecryption(deriveKey(key), []byte(nonce), encrypted)
 	if err != nil {
 		return "", err
 	}
@@ -96,9 +98,9 @@ func DecryptMetadata(metadata EncryptedString, key string) (string, error) {
 }
 
 // DecryptData decrypts file data.
-func DecryptData(data []byte, key string) ([]byte, error) {
+func DecryptData(data []byte, key []byte) ([]byte, error) {
 	nonce, ciphertext := data[:12], data[12:]
-	result, err := runAES256GCMDecryption([]byte(key), nonce, ciphertext)
+	result, err := runAES256GCMDecryption(key, nonce, ciphertext)
 	if err != nil {
 		return nil, err
 	}

@@ -19,7 +19,7 @@ type File struct {
 	Name          string    // the file name
 	Size          int64     // the file size in bytes
 	MimeType      string    // the MIME type of the file
-	EncryptionKey string    // the key used to encrypt the file data (UTF-8 encoded)
+	EncryptionKey []byte    // the key used to encrypt the file data
 	Created       time.Time // when the file was created
 	LastModified  time.Time // when the file was last modified
 	ParentUUID    string    // the [Directory.UUID] of the file's parent directory
@@ -80,7 +80,7 @@ func (filen *Filen) ReadDirectory(uuid string) ([]*File, []*Directory, error) {
 			Name:          metadata.Name,
 			Size:          int64(metadata.Size),
 			MimeType:      metadata.Mime,
-			EncryptionKey: metadata.Key,
+			EncryptionKey: []byte(metadata.Key),
 			Created:       util.TimestampToTime(int64(file.Timestamp)),
 			LastModified:  util.TimestampToTime(int64(metadata.LastModified)),
 			ParentUUID:    file.Parent,
@@ -189,7 +189,7 @@ func (filen *Filen) UploadFile(sourcePath string, parentUUID string) error {
 
 	// initialize random keys
 	fileUUID := uuid.New().String()
-	key := crypto.GenerateRandomString(32)
+	key := []byte(crypto.GenerateRandomString(32))
 	uploadKey := crypto.GenerateRandomString(32)
 
 	// encrypt data
@@ -226,7 +226,7 @@ func (filen *Filen) UploadFile(sourcePath string, parentUUID string) error {
 		Key          string `json:"key"`
 		LastModified int    `json:"lastModified"`
 		Created      int    `json:"created"`
-	}{name, len(plaintextData), "text/plain", key, int(time.Now().Unix()), int(time.Now().Unix())}
+	}{name, len(plaintextData), "text/plain", string(key), int(time.Now().Unix()), int(time.Now().Unix())}
 	metadataStr, err := json.Marshal(metadata)
 	if err != nil {
 		return err
