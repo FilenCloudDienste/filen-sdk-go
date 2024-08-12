@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
-	sdk "filen/filen-sdk-go/filen"
 	"fmt"
+	sdk "github.com/JupiterPi/filen-sdk-go/filen"
 	"os"
 	"strings"
 )

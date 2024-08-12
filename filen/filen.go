@@ -2,8 +2,8 @@
 package filen
 
 import (
-	"filen/filen-sdk-go/filen/client"
-	"filen/filen-sdk-go/filen/crypto"
+	"github.com/JupiterPi/filen-sdk-go/filen/client"
+	"github.com/JupiterPi/filen-sdk-go/filen/crypto"
 	"strings"
 )
 
