@@ -175,6 +175,7 @@ func (client *Client) DownloadFileChunk(uuid string, region string, bucket strin
 func (client *Client) UploadFileChunk(uuid string, chunkIdx int, parentUUID string, uploadKey string, data []byte) error {
 	ingestURL := ingestURLs[rand.Intn(len(ingestURLs))]
 	dataHash := hex.EncodeToString(crypto.RunSHA521(data))
+	fmt.Printf("Data hash %v: %s\n", chunkIdx, dataHash)
 	url := fmt.Sprintf("%s/v3/upload?uuid=%s&index=%v&parent=%s&uploadKey=%s&hash=%s",
 		ingestURL, uuid, chunkIdx, parentUUID, uploadKey, dataHash)
 

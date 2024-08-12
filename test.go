@@ -63,7 +63,11 @@ func main() {
 		panic(err)
 	}*/
 
-	err = filen.UploadFile("downloaded/uploadfile.txt", baseFolderUUID)
+	uploadFile, err := os.Open("downloaded/large_sample-1mb.txt")
+	if err != nil {
+		panic(err)
+	}
+	err = filen.UploadFile(uploadFile, baseFolderUUID)
 	if err != nil {
 		panic(err)
 	}
@@ -71,10 +75,10 @@ func main() {
 
 func WriteSampleFile() {
 	data := make([]byte, 0)
-	for i := 0; i < 1_000_000; i++ {
+	for i := 0; i < 200_000; i++ {
 		data = append(data, []byte(fmt.Sprintf("%v\n", i))...)
 	}
-	err := os.WriteFile("downloaded/large_sample.txt", data, 0666)
+	err := os.WriteFile("downloaded/large_sample-1mb.txt", data, 0666)
 	if err != nil {
 		panic(err)
 	}

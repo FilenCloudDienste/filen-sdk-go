@@ -76,7 +76,6 @@ func DecryptMetadataAllKeys(metadata EncryptedString, keys [][]byte) (string, er
 		decrypted, err := DecryptMetadata(metadata, key)
 		if err != nil {
 			errors = append(errors, err)
-			//log.Fatalf("%s %s %s", key, metadata, err)
 		} else {
 			return decrypted, nil
 		}
