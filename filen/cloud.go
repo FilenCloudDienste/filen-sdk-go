@@ -6,7 +6,6 @@ import (
 	"filen/filen-sdk-go/filen/client"
 	"filen/filen-sdk-go/filen/crypto"
 	"filen/filen-sdk-go/filen/util"
-	"fmt"
 	"github.com/google/uuid"
 	"math"
 	"os"
@@ -205,17 +204,14 @@ func (filen *Filen) UploadFile(source *os.File, parentUUID string) error {
 	fileName := stat.Name()
 	sourceSize := stat.Size()
 	chunks := int(math.Ceil(float64(sourceSize) / float64(chunkSize)))
-	fmt.Printf("Chunks: %v\n", chunks) //TODO tmp
 	for chunk := 0; chunk < chunks; chunk++ {
 		go func() {
 			readSem <- 1
 			defer func() { <-readSem }()
 
-			fmt.Printf("Started reading %v\n", chunk)
-
 			// read chunk
 			chunkStart := chunk * chunkSize
-			chunkEnd := int(math.Min(float64(chunk+1)*float64(sourceSize), float64(sourceSize)))
+			chunkEnd := int(math.Min(float64(chunk+1)*float64(chunkSize), float64(sourceSize)))
 			plaintextChunkData := make([]byte, chunkEnd-chunkStart)
 			_, err := source.ReadAt(plaintextChunkData, int64(chunkStart))
 			if err != nil {
@@ -233,14 +229,10 @@ func (filen *Filen) UploadFile(source *os.File, parentUUID string) error {
 				uploadSem <- 1
 				defer func() { <-uploadSem }()
 
-				fmt.Printf("Started uploading %v\n", chunk)
-
 				err = filen.client.UploadFileChunk(fileUUID, chunk, parentUUID, uploadKey, chunkData)
 				if err != nil {
 					errs <- err
 				}
-
-				fmt.Printf("Done %v\n", chunk)
 
 				cFinished <- 1
 			}()

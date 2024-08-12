@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"filen/filen-sdk-go/filen/crypto"
 	"fmt"
 	"io"
@@ -173,21 +174,36 @@ func (client *Client) DownloadFileChunk(uuid string, region string, bucket strin
 
 // UploadFileChunk uploads a file chunk to the storage backend.
 func (client *Client) UploadFileChunk(uuid string, chunkIdx int, parentUUID string, uploadKey string, data []byte) error {
+	// build request
 	ingestURL := ingestURLs[rand.Intn(len(ingestURLs))]
 	dataHash := hex.EncodeToString(crypto.RunSHA521(data))
-	fmt.Printf("Data hash %v: %s\n", chunkIdx, dataHash)
 	url := fmt.Sprintf("%s/v3/upload?uuid=%s&index=%v&parent=%s&uploadKey=%s&hash=%s",
 		ingestURL, uuid, chunkIdx, parentUUID, uploadKey, dataHash)
-
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+client.APIKey)
+
+	// send request
 	httpClient := http.Client{}
-	_, err = httpClient.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return err
+	}
+
+	// check response
+	resBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+	response := APIResponse{}
+	err = json.Unmarshal(resBody, &response)
+	if err != nil {
+		return err
+	}
+	if response.Status == false {
+		return errors.New("Cannot upload file chunk: " + response.Message)
 	}
 
 	return nil
