@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"slices"
 )
 
 // EncryptedString denotes that a string is encrypted and can't be used meaningfully before being decrypted.
@@ -70,6 +71,7 @@ func (e *AllKeysFailedError) Error() string {
 // DecryptMetadataAllKeys calls [DecryptMetadata] using all provided keys.
 func DecryptMetadataAllKeys(metadata EncryptedString, keys [][]byte) (string, error) {
 	errors := make([]error, 0)
+	slices.Reverse(keys)
 	for _, key := range keys {
 		decrypted, err := DecryptMetadata(metadata, key)
 		if err != nil {
