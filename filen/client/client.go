@@ -1,3 +1,6 @@
+// Package client handles HTTP requests to the API and storage backends.
+//
+// API definitions are at https://gateway.filen.io/v3/docs.
 package client
 
 import (
@@ -45,15 +48,17 @@ var (
 	}
 )
 
+// Client carries configuration.
 type Client struct {
-	APIKey string
+	APIKey string // the Filen API key
 }
 
+// A RequestError carries information on a failed HTTP request.
 type RequestError struct {
-	Message         string
-	Method          string
-	Path            string
-	UnderlyingError error
+	Message         string // description of where the error occurred
+	Method          string // HTTP method of the request
+	Path            string // URL path of the request
+	UnderlyingError error  // the underlying error
 }
 
 func (e *RequestError) Error() string {
@@ -62,7 +67,15 @@ func (e *RequestError) Error() string {
 
 // api
 
-func (client *Client) request(method string, path string, request any, data any) (*APIResponse, error) {
+// Request makes an HTTP request with an optional body and optionally returning a response body.
+//
+// The API sends responses in the format (written as TS type):
+//
+//	{status: number, message: string, code: string, data?: any}
+//
+// The APIResponse is returned, and the unmarshalled `data` is written to the data parameter, if applicable.
+func (client *Client) Request(method string, path string, request any, data any) (*APIResponse, error) {
+	// marshal request body
 	var marshalled []byte
 	if request != nil {
 		var err error
@@ -72,28 +85,31 @@ func (client *Client) request(method string, path string, request any, data any)
 		}
 	}
 
+	// build request
 	gatewayURL := gatewayURLs[rand.Intn(len(gatewayURLs))]
 	req, err := http.NewRequest(method, gatewayURL+path, bytes.NewReader(marshalled))
 	if err != nil {
 		return nil, &RequestError{"Cannot build request", method, path, err}
 	}
 
+	// set headers (authorization)
 	req.Header.Set("Content-Type", "application/json")
 	if client.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+client.APIKey)
 	}
 
+	// send request
 	httpClient := http.Client{Timeout: 10 * time.Second}
 	res, err := httpClient.Do(req)
 	if err != nil {
 		return nil, &RequestError{"Cannot send request", method, path, err}
 	}
-
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, &RequestError{"Cannot read response body", method, path, err}
 	}
 
+	// try unmarshal response
 	response := APIResponse{}
 	err = json.Unmarshal(resBody, &response)
 	if err != nil {
@@ -104,10 +120,9 @@ func (client *Client) request(method string, path string, request any, data any)
 		}
 		return nil, &RequestError{"Response contains no data", method, path, err}
 	}
-
 	err = json.Unmarshal(response.Data, data)
 	if err != nil {
-		return nil, &RequestError{fmt.Sprintf("Cannot unmarshal response data for response %#v", response), method, path, err}
+		return nil, &RequestError{fmt.Sprintf("Cannot unmarshal response data for response %s", string(resBody)), method, path, err}
 	}
 
 	return &response, nil
@@ -119,11 +134,12 @@ type nakedApiResponse struct {
 	Code    string `json:"code"`
 }
 
+// APIResponse represents a response from the API.
 type APIResponse struct {
-	Status  bool            `json:"status"`
-	Message string          `json:"message"`
-	Code    string          `json:"code"`
-	Data    json.RawMessage `json:"data"`
+	Status  bool            `json:"status"`  // whether the request was successful
+	Message string          `json:"message"` // additional information
+	Code    string          `json:"code"`    // a status code
+	Data    json.RawMessage `json:"data"`    // (optional) response body
 }
 
 func (res *APIResponse) String() string {
@@ -132,9 +148,10 @@ func (res *APIResponse) String() string {
 
 // file chunks
 
-func (client *Client) DownloadFileChunk(uuid string, region string, bucket string, chunk int) ([]byte, error) {
+// DownloadFileChunk downloads a file chunk from the storage backend.
+func (client *Client) DownloadFileChunk(uuid string, region string, bucket string, chunkIdx int) ([]byte, error) {
 	egestURL := egestURLs[rand.Intn(len(egestURLs))]
-	url := fmt.Sprintf("%s/%s/%s/%s/%v", egestURL, region, bucket, uuid, chunk)
+	url := fmt.Sprintf("%s/%s/%s/%s/%v", egestURL, region, bucket, uuid, chunkIdx)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -154,6 +171,7 @@ func (client *Client) DownloadFileChunk(uuid string, region string, bucket strin
 	return data, nil
 }
 
+// UploadFileChunk uploads a file chunk to the storage backend.
 func (client *Client) UploadFileChunk(uuid string, chunkIdx int, parentUUID string, uploadKey string, data []byte) error {
 	ingestURL := ingestURLs[rand.Intn(len(ingestURLs))]
 	dataHash := hex.EncodeToString(crypto.RunSHA521(data))

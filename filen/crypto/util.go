@@ -35,6 +35,7 @@ func runAES256GCMDecryption(key []byte, nonce []byte, ciphertext []byte) ([]byte
 	return result, nil
 }
 
+// GenerateRandomString generates a cryptographically secure random string based on a selection of alphanumerical characters.
 func GenerateRandomString(length int) string {
 	runes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	str := ""

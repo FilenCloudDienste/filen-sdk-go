@@ -8,10 +8,6 @@ import (
 	"strings"
 )
 
-var (
-	filen = sdk.New()
-)
-
 func main() {
 	// get credentials
 	//email := Input("Email: ", "filentest1@jupiterpi.de")
@@ -22,7 +18,7 @@ func main() {
 
 	WriteSampleFile()
 
-	err := filen.Login(email, password)
+	filen, err := sdk.New(email, password)
 	if err != nil {
 		panic(err)
 	}

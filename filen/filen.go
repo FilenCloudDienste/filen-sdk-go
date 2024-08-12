@@ -1,3 +1,4 @@
+// Package filen provides an SDK interface to interact with the cloud drive.
 package filen
 
 import (
@@ -6,22 +7,27 @@ import (
 	"strings"
 )
 
+// Filen provides the SDK interface. Needs to be initialized via [New].
 type Filen struct {
-	client     *client.Client
+	client *client.Client
+
+	// MasterKeys contains the crypto master keys for the current user. When the user changes
+	// their password, a new master key is appended. For decryption, all master keys are tried
+	// until one works; for decryption, always use the latest master key via [Test].
 	MasterKeys []string
 }
 
-func New() *Filen {
-	return &Filen{
+// New creates a new Filen and initializes it with the given email and password
+// by logging in with the API and preparing the API key and master keys.
+func New(email, password string) (*Filen, error) {
+	filen := &Filen{
 		client: &client.Client{},
 	}
-}
 
-func (filen *Filen) Login(email, password string) error {
 	// fetch salt
 	authInfo, err := filen.client.GetAuthInfo(email)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	masterKey, password := crypto.GeneratePasswordAndMasterKey(password, authInfo.Salt)
@@ -29,31 +35,32 @@ func (filen *Filen) Login(email, password string) error {
 	// login and get keys
 	keys, err := filen.client.Login(email, password)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	filen.client.APIKey = keys.APIKey
 
-	// fetch master keys
+	// fetch, encrypt and apply master keys
 	encryptedMasterKey, err := crypto.EncryptMetadata(masterKey, masterKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	masterKeys, err := filen.client.GetUserMasterKeys(encryptedMasterKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	masterKeysStr, err := crypto.DecryptMetadata(masterKeys.Keys, masterKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, key := range strings.Split(masterKeysStr, "|") {
 		filen.MasterKeys = append(filen.MasterKeys, key)
 	}
 
-	return nil
+	return filen, nil
 }
 
-// masterKey returns the master key to use for encryption
-func (filen *Filen) masterKey() string {
+// CurrentMasterKey returns the current master key to use for encryption.
+// Multiple possible master keys exist for decryption, but only the latest one should be used for encryption.
+func (filen *Filen) CurrentMasterKey() string {
 	return filen.MasterKeys[len(filen.MasterKeys)-1]
 }

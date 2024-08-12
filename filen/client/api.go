@@ -9,12 +9,13 @@ type AuthInfo struct {
 	Salt        string `json:"salt"`
 }
 
+// GetAuthInfo calls /v3/auth/info.
 func (client *Client) GetAuthInfo(email string) (*AuthInfo, error) {
 	request := struct {
 		Email string `json:"email"`
 	}{email}
 	authInfo := &AuthInfo{}
-	_, err := client.request("POST", "/v3/auth/info", request, authInfo)
+	_, err := client.Request("POST", "/v3/auth/info", request, authInfo)
 	return authInfo, err
 }
 
@@ -27,6 +28,7 @@ type LoginKeys struct {
 	PrivateKey string                 `json:"privateKey"`
 }
 
+// Login calls /v3/login.
 func (client *Client) Login(email, password string) (*LoginKeys, error) {
 	request := struct {
 		Email         string `json:"email"`
@@ -35,7 +37,7 @@ func (client *Client) Login(email, password string) (*LoginKeys, error) {
 		AuthVersion   int    `json:"authVersion"`
 	}{email, password, "XXXXXX", 2}
 	loginKeys := &LoginKeys{}
-	_, err := client.request("POST", "/v3/login", request, loginKeys)
+	_, err := client.Request("POST", "/v3/login", request, loginKeys)
 	return loginKeys, err
 }
 
@@ -45,9 +47,10 @@ type UserBaseFolder struct {
 	UUID string `json:"uuid"`
 }
 
+// GetUserBaseFolder calls /v3/user/baseFolder.
 func (client *Client) GetUserBaseFolder() (*UserBaseFolder, error) {
 	userBaseFolder := &UserBaseFolder{}
-	_, err := client.request("GET", "/v3/user/baseFolder", nil, userBaseFolder)
+	_, err := client.Request("GET", "/v3/user/baseFolder", nil, userBaseFolder)
 	return userBaseFolder, err
 }
 
@@ -79,12 +82,13 @@ type DirectoryContent struct {
 	} `json:"folders"`
 }
 
+// GetDirectoryContent calls /v3/dir/content.
 func (client *Client) GetDirectoryContent(uuid string) (*DirectoryContent, error) {
 	request := struct {
 		UUID string `json:"uuid"`
 	}{uuid}
 	directoryContent := &DirectoryContent{}
-	_, err := client.request("POST", "/v3/dir/content", request, directoryContent)
+	_, err := client.Request("POST", "/v3/dir/content", request, directoryContent)
 	return directoryContent, err
 }
 
@@ -94,12 +98,13 @@ type UserMasterKeys struct {
 	Keys crypto.EncryptedString `json:"keys"`
 }
 
+// GetUserMasterKeys calls /v3/user/masterKeys.
 func (client *Client) GetUserMasterKeys(encryptedMasterKey crypto.EncryptedString) (*UserMasterKeys, error) {
 	request := struct {
 		MasterKey crypto.EncryptedString `json:"masterKeys"`
 	}{encryptedMasterKey}
 	userMasterKeys := &UserMasterKeys{}
-	_, err := client.request("POST", "/v3/user/masterKeys", request, userMasterKeys)
+	_, err := client.Request("POST", "/v3/user/masterKeys", request, userMasterKeys)
 	return userMasterKeys, err
 }
 
@@ -118,7 +123,17 @@ type UploadDonePayload struct {
 	UploadKey  string                 `json:"uploadKey"`
 }
 
-func (client *Client) UploadDone(payload UploadDonePayload) error {
-	_, err := client.request("POST", "/v3/upload/done", payload, nil)
-	return err
+type UploadDoneResponse struct {
+	Chunks int `json:"chunks"`
+	Size   int `json:"size"`
+}
+
+// UploadDone calls /v3/upload/done.
+func (client *Client) UploadDone(payload UploadDonePayload) (*UploadDoneResponse, error) {
+	response := &UploadDoneResponse{}
+	_, err := client.Request("POST", "/v3/upload/done", payload, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }

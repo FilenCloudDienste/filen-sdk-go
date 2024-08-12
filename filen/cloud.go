@@ -6,7 +6,6 @@ import (
 	"filen/filen-sdk-go/filen/client"
 	"filen/filen-sdk-go/filen/crypto"
 	"filen/filen-sdk-go/filen/util"
-	"fmt"
 	"github.com/google/uuid"
 	"os"
 	"path/filepath"
@@ -14,30 +13,33 @@ import (
 	"time"
 )
 
+// File represents a file on the cloud drive.
 type File struct {
-	UUID          string
-	Name          string
-	Size          int64
-	MimeType      string
-	EncryptionKey string
-	Created       time.Time
-	LastModified  time.Time
-	ParentUUID    string
-	Favorited     bool
-	Region        string
-	Bucket        string
-	Chunks        int
+	UUID          string    // the UUID of the cloud item
+	Name          string    // the file name
+	Size          int64     // the file size in bytes
+	MimeType      string    // the MIME type of the file
+	EncryptionKey string    // the key used to encrypt the file data (UTF-8 encoded)
+	Created       time.Time // when the file was created
+	LastModified  time.Time // when the file was last modified
+	ParentUUID    string    // the [Directory.UUID] of the file's parent directory
+	Favorited     bool      // whether the file is marked a favorite
+	Region        string    // the file's storage region
+	Bucket        string    // the file's storage bucket
+	Chunks        int       // how many 1 MiB chunks the file is partitioned into
 }
 
+// Directory represents a directory on the cloud drive.
 type Directory struct {
-	UUID       string
-	Name       string
-	ParentUUID string
-	Color      string
-	Created    time.Time
-	Favorited  bool
+	UUID       string    // the UUID of the cloud item
+	Name       string    // the directory name
+	ParentUUID string    // the [Directory.UUID] of the directory's parent directory (or zero value for the root directory)
+	Color      string    // the color assigned to the directory (zero value means default color)
+	Created    time.Time // when the directory was created
+	Favorited  bool      // whether the directory is marked a favorite
 }
 
+// GetBaseFolderUUID fetches the UUID of the cloud drive's root directory.
 func (filen *Filen) GetBaseFolderUUID() (string, error) {
 	userBaseFolder, err := filen.client.GetUserBaseFolder()
 	if err != nil {
@@ -46,6 +48,7 @@ func (filen *Filen) GetBaseFolderUUID() (string, error) {
 	return userBaseFolder.UUID, nil
 }
 
+// ReadDirectory fetches the files and directories that are children of a directory (specified by UUID).
 func (filen *Filen) ReadDirectory(uuid string) ([]*File, []*Directory, error) {
 	// fetch directory content
 	directoryContent, err := filen.client.GetDirectoryContent(uuid)
@@ -78,8 +81,8 @@ func (filen *Filen) ReadDirectory(uuid string) ([]*File, []*Directory, error) {
 			Size:          int64(metadata.Size),
 			MimeType:      metadata.Mime,
 			EncryptionKey: metadata.Key,
-			Created:       util.TimestampToTime(file.Timestamp),
-			LastModified:  util.TimestampToTime(metadata.LastModified),
+			Created:       util.TimestampToTime(int64(file.Timestamp)),
+			LastModified:  util.TimestampToTime(int64(metadata.LastModified)),
 			ParentUUID:    file.Parent,
 			Favorited:     file.Favorited == 1,
 			Region:        file.Region,
@@ -108,7 +111,7 @@ func (filen *Filen) ReadDirectory(uuid string) ([]*File, []*Directory, error) {
 			Name:       name.Name,
 			ParentUUID: directory.Parent,
 			Color:      "<none>", //TODO tmp
-			Created:    util.TimestampToTime(directory.Timestamp),
+			Created:    util.TimestampToTime(int64(directory.Timestamp)),
 			Favorited:  directory.Favorited == 1,
 		})
 	}
@@ -122,12 +125,14 @@ const (
 	chunkSize              = 1048576
 )
 
+// DownloadFile downloads a file from the cloud drive into a local destination.
 func (filen *Filen) DownloadFile(file *File, destination *os.File) error {
 	downloadSem := make(chan int, maxConcurrentDownloads)
 	writeSem := make(chan int, maxConcurrentWriters)
-	c := make(chan int)
+	cFinished := make(chan int)
 	errs := make(chan error)
 
+	// download chunks and write to disk concurrently
 	for chunk := 0; chunk < file.Chunks; chunk++ {
 		go func() {
 			downloadSem <- 1
@@ -154,14 +159,16 @@ func (filen *Filen) DownloadFile(file *File, destination *os.File) error {
 					return
 				}
 
-				c <- 1
+				cFinished <- 1
 			}()
 		}()
 	}
+
+	// wait for all to finish, or return error
 	finished := 0
 	for {
 		select {
-		case <-c:
+		case <-cFinished:
 			finished++
 			if finished == file.Chunks {
 				return nil
@@ -172,23 +179,30 @@ func (filen *Filen) DownloadFile(file *File, destination *os.File) error {
 	}
 }
 
+// UploadFile uploads a local file (specified by path) to a cloud directory (specified by UUID).
 func (filen *Filen) UploadFile(sourcePath string, parentUUID string) error {
+	// read file
 	plaintextData, err := os.ReadFile(sourcePath)
 	if err != nil {
 		return err
 	}
 
+	// initialize random keys
 	fileUUID := uuid.New().String()
 	key := crypto.GenerateRandomString(32)
 	uploadKey := crypto.GenerateRandomString(32)
 
+	// encrypt data
 	data, err := crypto.EncryptData(plaintextData, key)
 
+	// upload chunks
 	err = filen.client.UploadFileChunk(fileUUID, 0, parentUUID, uploadKey, data)
 	if err != nil {
 		return err
 	}
+	//TODO handle multiple file chunks
 
+	// encrypt info about file
 	name := filepath.Base(sourcePath)
 	nameEncrypted, err := crypto.EncryptMetadata(name, key)
 	if err != nil {
@@ -204,6 +218,7 @@ func (filen *Filen) UploadFile(sourcePath string, parentUUID string) error {
 		return err
 	}
 
+	// encrypt file metadata
 	metadata := struct {
 		Name         string `json:"name"`
 		Size         int    `json:"size"`
@@ -216,13 +231,13 @@ func (filen *Filen) UploadFile(sourcePath string, parentUUID string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(metadataStr))
-	metadataEncrypted, err := crypto.EncryptMetadata(string(metadataStr), filen.masterKey())
+	metadataEncrypted, err := crypto.EncryptMetadata(string(metadataStr), filen.CurrentMasterKey())
 	if err != nil {
 		return err
 	}
 
-	err = filen.client.UploadDone(client.UploadDonePayload{
+	// mark upload as done
+	_, err = filen.client.UploadDone(client.UploadDonePayload{
 		UUID:       fileUUID,
 		Name:       nameEncrypted,
 		NameHashed: nameHashed,
