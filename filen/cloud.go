@@ -3,6 +3,8 @@ package filen
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/JupiterPi/filen-sdk-go/filen/client"
 	"github.com/JupiterPi/filen-sdk-go/filen/crypto"
 	"github.com/JupiterPi/filen-sdk-go/filen/util"
@@ -10,6 +12,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,6 +49,50 @@ func (filen *Filen) GetBaseFolderUUID() (string, error) {
 		return "", err
 	}
 	return userBaseFolder.UUID, nil
+}
+
+// PathToUUID identifies a cloud item by its path and returns its UUID.
+// Set the requireDirectory to differentiate between files and directories with the same path
+// (otherwise, the file will be found).
+func (filen *Filen) PathToUUID(path string, requireDirectory bool) (string, error) {
+	baseFolderUUID, err := filen.GetBaseFolderUUID()
+	if err != nil {
+		return "", err
+	}
+
+	segments := strings.Split(path, "/")
+
+	currentPath := ""
+	currentUUID := baseFolderUUID
+SegmentsLoop:
+	for _, segment := range segments {
+		if segment == "" {
+			continue
+		}
+
+		files, directories, err := filen.ReadDirectory(currentUUID)
+		if err != nil {
+			return "", err
+		}
+		if !requireDirectory {
+			for _, file := range files {
+				if file.Name == segment {
+					currentUUID = file.UUID
+					currentPath = currentPath + "/" + segment
+					continue SegmentsLoop
+				}
+			}
+		}
+		for _, directory := range directories {
+			if directory.Name == segment {
+				currentUUID = directory.UUID
+				currentPath = currentPath + "/" + segment
+				continue SegmentsLoop
+			}
+		}
+		return "", errors.New(fmt.Sprintf("item %s not found in directory %s", segment, currentPath))
+	}
+	return currentUUID, nil
 }
 
 // ReadDirectory fetches the files and directories that are children of a directory (specified by UUID).

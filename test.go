@@ -20,10 +20,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	baseFolderUUID, err := filen.GetBaseFolderUUID()
+	/*baseFolderUUID, err := filen.GetBaseFolderUUID()
 	if err != nil {
 		panic(err)
-	}
+	}*/
 
 	/*files, directories, err := filen.ReadDirectory(baseFolderUUID)
 	if err != nil {
@@ -63,14 +63,32 @@ func main() {
 		panic(err)
 	}*/
 
-	uploadFile, err := os.Open("downloaded/large_sample-1mb.txt")
+	/*uploadFile, err := os.Open("downloaded/large_sample-1mb.txt")
 	if err != nil {
 		panic(err)
 	}
 	err = filen.UploadFile(uploadFile, baseFolderUUID)
 	if err != nil {
 		panic(err)
+	}*/
+
+	uuid, err := filen.PathToUUID("", false)
+	if err != nil {
+		panic(err)
 	}
+	fmt.Println(uuid)
+
+	uuid, err = filen.PathToUUID("/Dev2", false)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(uuid)
+
+	uuid, err = filen.PathToUUID("/Dev2/Welcome.md", false)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(uuid)
 }
 
 func WriteSampleFile() {
