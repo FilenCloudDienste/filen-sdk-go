@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	sdk "github.com/JupiterPi/filen-sdk-go/filen"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -20,17 +22,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	/*baseFolderUUID, err := filen.GetBaseFolderUUID()
-	if err != nil {
-		panic(err)
-	}*/
-
-	/*files, directories, err := filen.ReadDirectory(baseFolderUUID)
+	baseFolderUUID, err := filen.GetBaseFolderUUID()
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Files:")
+	files, _, err := filen.ReadDirectory(baseFolderUUID)
+	if err != nil {
+		panic(err)
+	}
+
+	/*fmt.Println("Files:")
 	for _, file := range files {
 		fmt.Printf("%#v\n", file)
 	}
@@ -39,7 +41,7 @@ func main() {
 		fmt.Printf("%#v\n", directory)
 	}*/
 
-	/*idx := slices.IndexFunc(files, func(file *sdk.File) bool { return file.Name == "lsample.txt" })
+	idx := slices.IndexFunc(files, func(file *sdk.File) bool { return file.Name == "asdf.txt" })
 	if idx == -1 {
 		panic(errors.New("file not found"))
 	}
@@ -47,7 +49,7 @@ func main() {
 	_, err = os.Create("downloaded/" + file.Name)
 	if err != nil {
 		panic(err)
-	}*/
+	}
 
 	/*start := time.Now()
 	err = filen.DownloadFile(file, destination)
@@ -72,7 +74,7 @@ func main() {
 		panic(err)
 	}*/
 
-	uuid, err := filen.PathToUUID("", false)
+	/*uuid, err := filen.PathToUUID("", false)
 	if err != nil {
 		panic(err)
 	}
@@ -88,7 +90,23 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(uuid)
+	fmt.Println(uuid)*/
+
+	destination, err := os.Create("downloaded/asdf_test.txt")
+	if err != nil {
+		panic(err)
+	}
+	err = filen.DownloadFileToDisk(file, destination)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Proceeding with DownloadFileInMemory...")
+
+	data, err := filen.DownloadFileInMemory(file)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Data: %s\n", data)
 }
 
 func WriteSampleFile() {

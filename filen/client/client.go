@@ -19,33 +19,33 @@ import (
 var (
 	gatewayURLs = []string{
 		"https://gateway.filen.io",
-		"https://gateway.filen.net",
+		/*"https://gateway.filen.net",
 		"https://gateway.filen-1.net",
 		"https://gateway.filen-2.net",
 		"https://gateway.filen-3.net",
 		"https://gateway.filen-4.net",
 		"https://gateway.filen-5.net",
-		"https://gateway.filen-6.net",
+		"https://gateway.filen-6.net",*/
 	}
 	egestURLs = []string{
 		"https://egest.filen.io",
-		"https://egest.filen.net",
+		/*"https://egest.filen.net",
 		"https://egest.filen-1.net",
 		"https://egest.filen-2.net",
 		"https://egest.filen-3.net",
 		"https://egest.filen-4.net",
 		"https://egest.filen-5.net",
-		"https://egest.filen-6.net",
+		"https://egest.filen-6.net",*/
 	}
 	ingestURLs = []string{
 		"https://ingest.filen.io",
-		"https://ingest.filen.net",
+		/*"https://ingest.filen.net",
 		"https://ingest.filen-1.net",
 		"https://ingest.filen-2.net",
 		"https://ingest.filen-3.net",
 		"https://ingest.filen-4.net",
 		"https://ingest.filen-5.net",
-		"https://ingest.filen-6.net",
+		"https://ingest.filen-6.net",*/
 	}
 )
 
