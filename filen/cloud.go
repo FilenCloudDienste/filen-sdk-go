@@ -1,11 +1,13 @@
 package filen
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/util"
+	"github.com/google/uuid"
 	"strings"
 	"time"
 )
@@ -158,4 +160,49 @@ func (filen *Filen) ReadDirectory(uuid string) ([]*File, []*Directory, error) {
 	}
 
 	return files, directories, nil
+}
+
+// TrashFile moves a file to trash.
+func (filen *Filen) TrashFile(uuid string) error {
+	return filen.client.TrashFile(uuid)
+}
+
+// CreateDirectory creates a new directory.
+func (filen *Filen) CreateDirectory(parentUUID string, name string) (*Directory, error) {
+	directoryUUID := uuid.New().String()
+
+	// encrypt metadata
+	metadata := struct {
+		Name string `json:"name"`
+	}{name}
+	metadataStr, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
+	metadataEncrypted, err := crypto.EncryptMetadata(string(metadataStr), filen.CurrentMasterKey())
+	if err != nil {
+		return nil, err
+	}
+
+	// hash name
+	nameHashed := hex.EncodeToString(crypto.RunSHA521([]byte(name)))
+
+	// send
+	response, err := filen.client.CreateDirectory(directoryUUID, metadataEncrypted, nameHashed, parentUUID)
+	if err != nil {
+		return nil, err
+	}
+	return &Directory{
+		UUID:       response.UUID,
+		Name:       name,
+		ParentUUID: parentUUID,
+		Color:      "",
+		Created:    time.Now(),
+		Favorited:  false,
+	}, nil
+}
+
+// TrashDirectory moves a directory to trash.
+func (filen *Filen) TrashDirectory(uuid string) error {
+	return filen.client.TrashDirectory(uuid)
 }

@@ -63,7 +63,11 @@ type RequestError struct {
 }
 
 func (e *RequestError) Error() string {
-	return fmt.Sprintf("%s %s: %s (%s)", e.Method, e.Path, e.Message, e.UnderlyingError)
+	if e.UnderlyingError == nil {
+		return fmt.Sprintf("%s %s: %s", e.Method, e.Path, e.Message)
+	} else {
+		return fmt.Sprintf("%s %s: %s (%s)", e.Method, e.Path, e.Message, e.UnderlyingError)
+	}
 }
 
 // api
@@ -110,29 +114,22 @@ func (client *Client) Request(method string, path string, request any, data any)
 		return nil, &RequestError{"Cannot read response body", method, path, err}
 	}
 
-	// try unmarshal response
+	// read response
 	response := APIResponse{}
 	err = json.Unmarshal(resBody, &response)
 	if err != nil {
-		var nakedResponse nakedApiResponse
-		err = json.Unmarshal(resBody, &nakedResponse)
-		if err != nil {
-			return nil, &RequestError{"Cannot unmarshal naked response body", method, path, err}
+		return nil, &RequestError{fmt.Sprintf("Cannot unmarshal response %s", string(resBody)), method, path, nil}
+	}
+	if data != nil { // data wanted
+		if response.Data == nil {
+			return nil, &RequestError{fmt.Sprintf("No data in response %s", string(resBody)), method, path, nil}
 		}
-		return nil, &RequestError{"Response contains no data", method, path, err}
+		err = json.Unmarshal(response.Data, data)
+		if err != nil {
+			return nil, &RequestError{fmt.Sprintf("Cannot unmarshal response data for response %s", string(resBody)), method, path, err}
+		}
 	}
-	err = json.Unmarshal(response.Data, data)
-	if err != nil {
-		return nil, &RequestError{fmt.Sprintf("Cannot unmarshal response data for response %s", string(resBody)), method, path, err}
-	}
-
 	return &response, nil
-}
-
-type nakedApiResponse struct {
-	Status  bool   `json:"status"`
-	Message string `json:"message"`
-	Code    string `json:"code"`
 }
 
 // APIResponse represents a response from the API.
@@ -140,7 +137,7 @@ type APIResponse struct {
 	Status  bool            `json:"status"`  // whether the request was successful
 	Message string          `json:"message"` // additional information
 	Code    string          `json:"code"`    // a status code
-	Data    json.RawMessage `json:"data"`    // (optional) response body
+	Data    json.RawMessage `json:"data"`    // response body, or nil
 }
 
 func (res *APIResponse) String() string {

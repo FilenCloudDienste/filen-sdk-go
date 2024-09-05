@@ -2,7 +2,7 @@ package client
 
 import "github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
 
-// POST /v3/auth/info
+// /v3/auth/info
 
 type AuthInfo struct {
 	AuthVersion int    `json:"authVersion"`
@@ -19,9 +19,9 @@ func (client *Client) GetAuthInfo(email string) (*AuthInfo, error) {
 	return authInfo, err
 }
 
-// POST /v3/login
+// /v3/login
 
-type LoginKeys struct {
+type LoginResponse struct {
 	APIKey     string                 `json:"apiKey"`
 	MasterKeys crypto.EncryptedString `json:"masterKeys"`
 	PublicKey  string                 `json:"publicKey"`
@@ -29,19 +29,19 @@ type LoginKeys struct {
 }
 
 // Login calls /v3/login.
-func (client *Client) Login(email, password string) (*LoginKeys, error) {
+func (client *Client) Login(email, password string) (*LoginResponse, error) {
 	request := struct {
 		Email         string `json:"email"`
 		Password      string `json:"password"`
 		TwoFactorCode string `json:"twoFactorCode"`
 		AuthVersion   int    `json:"authVersion"`
 	}{email, password, "XXXXXX", 2}
-	loginKeys := &LoginKeys{}
-	_, err := client.Request("POST", "/v3/login", request, loginKeys)
-	return loginKeys, err
+	response := &LoginResponse{}
+	_, err := client.Request("POST", "/v3/login", request, response)
+	return response, err
 }
 
-// GET /v3/user/baseFolder
+// /v3/user/baseFolder
 
 type UserBaseFolder struct {
 	UUID string `json:"uuid"`
@@ -54,7 +54,7 @@ func (client *Client) GetUserBaseFolder() (*UserBaseFolder, error) {
 	return userBaseFolder, err
 }
 
-// POST /v3/dir/content
+// /v3/dir/content
 
 type DirectoryContent struct {
 	Uploads []struct {
@@ -92,7 +92,7 @@ func (client *Client) GetDirectoryContent(uuid string) (*DirectoryContent, error
 	return directoryContent, err
 }
 
-// POST /v3/user/masterKeys
+// /v3/user/masterKeys
 
 type UserMasterKeys struct {
 	Keys crypto.EncryptedString `json:"keys"`
@@ -108,9 +108,9 @@ func (client *Client) GetUserMasterKeys(encryptedMasterKey crypto.EncryptedStrin
 	return userMasterKeys, err
 }
 
-// POST /v3/upload/done
+// /v3/upload/done
 
-type UploadDonePayload struct {
+type UploadDoneRequest struct {
 	UUID       string                 `json:"uuid"`
 	Name       crypto.EncryptedString `json:"name"`
 	NameHashed string                 `json:"nameHashed"`
@@ -129,11 +129,61 @@ type UploadDoneResponse struct {
 }
 
 // UploadDone calls /v3/upload/done.
-func (client *Client) UploadDone(payload UploadDonePayload) (*UploadDoneResponse, error) {
+func (client *Client) UploadDone(request UploadDoneRequest) (*UploadDoneResponse, error) {
 	response := &UploadDoneResponse{}
-	_, err := client.Request("POST", "/v3/upload/done", payload, response)
+	_, err := client.Request("POST", "/v3/upload/done", request, response)
 	if err != nil {
 		return nil, err
 	}
 	return response, nil
+}
+
+// /v3/file/trash
+
+// TrashFile calls /v3/file/trash
+func (client *Client) TrashFile(uuid string) error {
+	request := struct {
+		UUID string `json:"uuid"`
+	}{uuid}
+	_, err := client.Request("POST", "/v3/file/trash", request, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// /v3/dir/create
+
+type CreateDirectoryResponse struct {
+	UUID string `json:"uuid"`
+}
+
+// CreateDirectory calls /v3/dir/create
+func (client *Client) CreateDirectory(uuid string, metadata crypto.EncryptedString, nameHashed string, parentUUID string) (*CreateDirectoryResponse, error) {
+	request := struct {
+		UUID              string `json:"uuid"`
+		EncryptedMetadata string `json:"name"`
+		NameHashed        string `json:"nameHashed"`
+		ParentUUID        string `json:"parent"`
+	}{uuid, string(metadata), nameHashed, parentUUID}
+	response := &CreateDirectoryResponse{}
+	_, err := client.Request("POST", "/v3/dir/create", request, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// /v3/dir/trash
+
+// TrashDirectory calls /v3/dir/trash
+func (client *Client) TrashDirectory(uuid string) error {
+	request := struct {
+		UUID string `json:"uuid"`
+	}{uuid}
+	_, err := client.Request("POST", "/v3/dir/trash", request, nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }

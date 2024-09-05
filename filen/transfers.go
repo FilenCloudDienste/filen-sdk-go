@@ -205,7 +205,7 @@ WaitForAll:
 	}
 
 	// mark upload as done
-	_, err = filen.client.UploadDone(client.UploadDonePayload{
+	_, err = filen.client.UploadDone(client.UploadDoneRequest{
 		UUID:       fileUUID,
 		Name:       nameEncrypted,
 		NameHashed: nameHashed,

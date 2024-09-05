@@ -92,7 +92,7 @@ func main() {
 	}
 	fmt.Println(uuid)*/
 
-	destination, err := os.Create("downloaded/asdf_test.txt")
+	/*destination, err := os.Create("downloaded/asdf_test.txt")
 	if err != nil {
 		panic(err)
 	}
@@ -106,7 +106,30 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Data: \"%s\"\n", data)
+	fmt.Printf("Data: \"%s\"\n", data)*/
+
+	directory, err := filen.CreateDirectory(baseFolderUUID, "test file created via SDK")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Created directory: %#v\n", directory)
+
+	files, _, err = filen.ReadDirectory(directory.UUID)
+	if err != nil {
+		panic(err)
+	}
+	fileIdx := slices.IndexFunc(files, func(file *sdk.File) bool { return file.Name == "test.txt" })
+	file = files[fileIdx]
+
+	err = filen.TrashFile(file.UUID)
+	if err != nil {
+		panic(err)
+	}
+
+	err = filen.TrashDirectory(directory.UUID)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func WriteSampleFile() {
