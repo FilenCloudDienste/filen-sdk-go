@@ -1,6 +1,6 @@
 package client
 
-import "github.com/JupiterPi/filen-sdk-go/filen/crypto"
+import "github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
 
 // POST /v3/auth/info
 

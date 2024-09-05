@@ -3,8 +3,8 @@ package filen
 import (
 	"encoding/hex"
 	"encoding/json"
-	"github.com/JupiterPi/filen-sdk-go/filen/client"
-	"github.com/JupiterPi/filen-sdk-go/filen/crypto"
+	"github.com/FilenCloudDienste/filen-sdk-go/filen/client"
+	"github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
 	"github.com/google/uuid"
 	"math"
 	"os"

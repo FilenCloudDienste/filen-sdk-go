@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/JupiterPi/filen-sdk-go/filen/crypto"
-	"github.com/JupiterPi/filen-sdk-go/filen/util"
+	"github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
+	"github.com/FilenCloudDienste/filen-sdk-go/filen/util"
 	"strings"
 	"time"
 )

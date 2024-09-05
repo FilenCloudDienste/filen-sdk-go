@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	sdk "github.com/JupiterPi/filen-sdk-go/filen"
+	sdk "github.com/FilenCloudDienste/filen-sdk-go/filen"
 	"os"
 	"slices"
 	"strings"

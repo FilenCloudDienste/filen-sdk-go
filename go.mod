@@ -1,4 +1,4 @@
-module github.com/JupiterPi/filen-sdk-go
+module github.com/FilenCloudDienste/filen-sdk-go
 
 go 1.22
 
