@@ -11,7 +11,7 @@ import (
 type Filen struct {
 	client *client.Client
 
-	email string
+	Email string
 
 	// MasterKeys contains the crypto master keys for the current user. When the user changes
 	// their password, a new master key is appended. For decryption, all master keys are tried
@@ -23,7 +23,7 @@ type Filen struct {
 // by logging in with the API and preparing the API key and master keys.
 func New(email, password string) (*Filen, error) {
 	filen := &Filen{
-		email:  email,
+		Email:  email,
 		client: &client.Client{},
 	}
 
