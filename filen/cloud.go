@@ -47,110 +47,50 @@ func (filen *Filen) GetBaseFolderUUID() (string, error) {
 	return userBaseFolder.UUID, nil
 }
 
-// PathToUUID identifies a cloud item by its path and returns its UUID.
+// FindItem find a cloud item by its path and returns it (either the File or the Directory will be returned).
 // Set the requireDirectory to differentiate between files and directories with the same path
 // (otherwise, the file will be found).
-func (filen *Filen) PathToUUID(path string, requireDirectory bool) (uuid string, isDirectory bool, err error) {
+func (filen *Filen) FindItem(path string, requireDirectory bool) (*File, *Directory, error) {
 	baseFolderUUID, err := filen.GetBaseFolderUUID()
 	if err != nil {
-		return "", false, err
+		return nil, nil, err
 	}
 
 	segments := strings.Split(path, "/")
 
 	currentPath := ""
-	uuid = baseFolderUUID
+	currentUUID := baseFolderUUID
 SegmentsLoop:
-	for _, segment := range segments {
+	for segmentIdx, segment := range segments {
 		if segment == "" {
 			continue
 		}
 
-		files, directories, err := filen.ReadDirectory(uuid)
+		files, directories, err := filen.ReadDirectory(currentUUID)
 		if err != nil {
-			return "", false, err
+			return nil, nil, err
 		}
 		if !requireDirectory {
 			for _, file := range files {
 				if file.Name == segment {
-					uuid = file.UUID
-					isDirectory = false
-					currentPath = currentPath + "/" + segment
-					continue SegmentsLoop
+					return file, nil, nil
 				}
 			}
 		}
 		for _, directory := range directories {
 			if directory.Name == segment {
-				uuid = directory.UUID
-				isDirectory = true
-				currentPath = currentPath + "/" + segment
-				continue SegmentsLoop
+				if segmentIdx == len(segments)-1 {
+					return nil, directory, nil
+				} else {
+					currentPath = currentPath + "/" + segment
+					currentUUID = directory.UUID
+					continue SegmentsLoop
+				}
 			}
 		}
-		return "", false, errors.New(fmt.Sprintf("item %s not found in directory %s", segment, currentPath))
+		return nil, nil, errors.New(fmt.Sprintf("item %s not found in directory %s", segment, currentPath))
 	}
-	return
-}
-
-// GetFile fetches info about a file based on its UUID.
-func (filen *Filen) GetFile(uuid string) (*File, error) {
-	// fetch info
-	file, err := filen.client.GetFile(uuid)
-	if err != nil {
-		return nil, err
-	}
-
-	// decrypt name
-	name, err := crypto.DecryptMetadataAllKeys(file.Name, filen.MasterKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	// decrypt mimeType
-	mimeType, err := crypto.DecryptMetadataAllKeys(file.MimeType, filen.MasterKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	return &File{
-		UUID:          file.UUID,
-		Name:          name,
-		Size:          int64(file.Size2), //TODO ?
-		MimeType:      mimeType,
-		EncryptionKey: nil,         //TODO ?
-		Created:       time.Time{}, //TODO ?
-		LastModified:  time.Time{}, //TODO ?
-		ParentUUID:    file.ParentUUID,
-		Favorited:     false, //TODO ?
-		Region:        file.Region,
-		Bucket:        file.Bucket,
-		Chunks:        0, //TODO ?
-	}, nil
-}
-
-// GetDirectory fetches info about a directory based on its UUID.
-func (filen *Filen) GetDirectory(uuid string) (*Directory, error) {
-	// fetch info
-	directory, err := filen.client.GetDirectory(uuid)
-	if err != nil {
-		return nil, err
-	}
-
-	// decrypt name
-	name, err := crypto.DecryptMetadataAllKeys(directory.Name, filen.MasterKeys)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Directory{
-		UUID:       directory.UUID,
-		Name:       name,
-		ParentUUID: directory.ParentUUID,
-		Color:      directory.Color,
-		Created:    time.Time{}, //TODO ?
-		Favorited:  directory.Favorited,
-	}, nil
+	return nil, nil, nil // not reachable
 }
 
 // ReadDirectory fetches the files and directories that are children of a directory (specified by UUID).

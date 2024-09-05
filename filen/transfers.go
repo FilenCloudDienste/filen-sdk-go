@@ -3,9 +3,11 @@ package filen
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/client"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
 	"github.com/google/uuid"
+	"io"
 	"math"
 	"os"
 	"strconv"
@@ -96,94 +98,101 @@ func (filen *Filen) DownloadFile(file *File, chunkHandler func(chunk int, data [
 	}
 }
 
-const (
-	maxConcurrentReaders = 16
-	maxConcurrentUploads = 16
-)
+const maxConcurrentUploads = 16
 
-// UploadFile uploads a local file (specified by path) to a cloud directory (specified by UUID).
-func (filen *Filen) UploadFile(source *os.File, parentUUID string) error {
-	// initialize random keys
+// UploadFile uploads data to a cloud file (specified by its name and its parent directory's UUID).
+func (filen *Filen) UploadFile(fileName string, parentUUID string, data io.Reader) (*File, error) {
+	uploaderSem := make(chan int, maxConcurrentUploads)
+	uploadFinished := make(chan int)
+	errs := make(chan error)
+
+	var region, bucket string
+
+	// uploader
 	fileUUID := uuid.New().String()
 	key := []byte(crypto.GenerateRandomString(32))
 	uploadKey := crypto.GenerateRandomString(32)
+	uploader := func(chunkData []byte, chunkIdx int) {
+		uploaderSem <- 1
+		defer func() { <-uploaderSem }()
 
-	readSem := make(chan int, maxConcurrentReaders)
-	uploadSem := make(chan int, maxConcurrentUploads)
-	cFinished := make(chan int)
-	errs := make(chan error)
+		// encrypt data
+		chunkData, err := crypto.EncryptData(chunkData, key)
+		if err != nil {
+			errs <- err
+		}
 
-	// read chunks, encrypt and upload concurrently
-	stat, err := source.Stat()
-	if err != nil {
-		return err
+		// upload chunk
+		uploadRegion, uploadBucket, err := filen.client.UploadFileChunk(fileUUID, chunkIdx, parentUUID, uploadKey, chunkData)
+		if err != nil {
+			errs <- err
+		}
+		region = uploadRegion
+		bucket = uploadBucket
+
+		uploadFinished <- 1
 	}
-	fileName := stat.Name()
-	sourceSize := stat.Size()
-	chunks := int(math.Ceil(float64(sourceSize) / float64(chunkSize)))
-	for chunk := 0; chunk < chunks; chunk++ {
-		go func() {
-			readSem <- 1
-			defer func() { <-readSem }()
 
-			// read chunk
-			chunkStart := chunk * chunkSize
-			chunkEnd := int(math.Min(float64(chunk+1)*float64(chunkSize), float64(sourceSize)))
-			plaintextChunkData := make([]byte, chunkEnd-chunkStart)
-			_, err := source.ReadAt(plaintextChunkData, int64(chunkStart))
-			if err != nil {
-				errs <- err
+	// read chunks
+	b := make([]byte, chunkSize)
+	chunk := make([]byte, 0)
+	chunks := 0
+	totalBytes := 0
+	for {
+		n, err := data.Read(b)
+		totalBytes += n
+		chunk = append(chunk, b[:n]...)
+		if len(chunk) >= chunkSize || (err == io.EOF && len(chunk) > 0) {
+			chunkData := chunk
+			if len(chunk) > chunkSize {
+				chunkData = chunk[:chunkSize]
 			}
+			chunk = chunk[len(chunkData):]
 
-			// encrypt data
-			chunkData, err := crypto.EncryptData(plaintextChunkData, key)
-			if err != nil {
-				errs <- err
+			go uploader(chunkData, chunks)
+			chunks++
+		}
+		if err == io.EOF {
+			if totalBytes == 0 {
+				return nil, errors.New("empty uploads are not supported")
 			}
-
-			// upload chunk
-			go func() {
-				uploadSem <- 1
-				defer func() { <-uploadSem }()
-
-				err = filen.client.UploadFileChunk(fileUUID, chunk, parentUUID, uploadKey, chunkData)
-				if err != nil {
-					errs <- err
-				}
-
-				cFinished <- 1
-			}()
-		}()
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// wait for all to finish, or return error
-	chunkUploadsFinished := 0
-WaitForAll:
-	for {
-		select {
-		case <-cFinished:
-			chunkUploadsFinished++
-			if chunkUploadsFinished == chunks {
-				break WaitForAll
+	uploadsFinished := 0
+	if chunks != 0 {
+	WaitForAll:
+		for {
+			select {
+			case <-uploadFinished:
+				uploadsFinished++
+				if uploadsFinished == chunks {
+					break WaitForAll
+				}
+			case err := <-errs:
+				return nil, err
 			}
-		case err := <-errs:
-			return err
 		}
 	}
 
 	// encrypt info about file
 	nameEncrypted, err := crypto.EncryptMetadata(fileName, key)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	nameHashed := hex.EncodeToString(crypto.RunSHA521([]byte(fileName)))
 	mimeType, err := crypto.EncryptMetadata("text/plain", key)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	sizeEncrypted, err := crypto.EncryptMetadata(strconv.Itoa(int(sourceSize)), key)
+	sizeEncrypted, err := crypto.EncryptMetadata(strconv.Itoa(totalBytes), key)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// encrypt file metadata
@@ -194,18 +203,18 @@ WaitForAll:
 		Key          string `json:"key"`
 		LastModified int    `json:"lastModified"`
 		Created      int    `json:"created"`
-	}{fileName, int(sourceSize), "text/plain", string(key), int(time.Now().Unix()), int(time.Now().Unix())}
+	}{fileName, totalBytes, "text/plain", string(key), int(time.Now().Unix()), int(time.Now().Unix())}
 	metadataStr, err := json.Marshal(metadata)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	metadataEncrypted, err := crypto.EncryptMetadata(string(metadataStr), filen.CurrentMasterKey())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// mark upload as done
-	_, err = filen.client.UploadDone(client.UploadDoneRequest{
+	response, err := filen.client.UploadDone(client.UploadDoneRequest{
 		UUID:       fileUUID,
 		Name:       nameEncrypted,
 		NameHashed: nameHashed,
@@ -218,8 +227,21 @@ WaitForAll:
 		UploadKey:  uploadKey,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &File{
+		UUID:          fileUUID,
+		Name:          fileName,
+		Size:          int64(totalBytes),
+		MimeType:      "application/octet-stream", //TODO correct mime type
+		EncryptionKey: []byte(uploadKey),
+		Created:       time.Now(), //TODO really?
+		LastModified:  time.Now(),
+		ParentUUID:    parentUUID,
+		Favorited:     false,
+		Region:        region,
+		Bucket:        bucket,
+		Chunks:        response.Chunks,
+	}, nil
 }

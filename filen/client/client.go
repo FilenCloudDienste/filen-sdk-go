@@ -170,7 +170,7 @@ func (client *Client) DownloadFileChunk(uuid string, region string, bucket strin
 }
 
 // UploadFileChunk uploads a file chunk to the storage backend.
-func (client *Client) UploadFileChunk(uuid string, chunkIdx int, parentUUID string, uploadKey string, data []byte) error {
+func (client *Client) UploadFileChunk(uuid string, chunkIdx int, parentUUID string, uploadKey string, data []byte) (region string, bucket string, err error) {
 	// build request
 	ingestURL := ingestURLs[rand.Intn(len(ingestURLs))]
 	dataHash := hex.EncodeToString(crypto.RunSHA521(data))
@@ -178,7 +178,7 @@ func (client *Client) UploadFileChunk(uuid string, chunkIdx int, parentUUID stri
 		ingestURL, uuid, chunkIdx, parentUUID, uploadKey, dataHash)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+client.APIKey)
 
@@ -186,22 +186,32 @@ func (client *Client) UploadFileChunk(uuid string, chunkIdx int, parentUUID stri
 	httpClient := http.Client{}
 	res, err := httpClient.Do(req)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 
 	// check response
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	response := APIResponse{}
 	err = json.Unmarshal(resBody, &response)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	if response.Status == false {
-		return errors.New("Cannot upload file chunk: " + response.Message)
+		return "", "", errors.New("Cannot upload file chunk: " + response.Message)
 	}
 
-	return nil
+	// read response data
+	type UploadChunkResponse struct {
+		Bucket string `json:"bucket"`
+		Region string `json:"region"`
+	}
+	uploadChunkResponse := &UploadChunkResponse{}
+	err = json.Unmarshal(response.Data, uploadChunkResponse)
+	if err != nil {
+		return "", "", err
+	}
+	return uploadChunkResponse.Region, uploadChunkResponse.Bucket, nil
 }

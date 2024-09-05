@@ -2,11 +2,10 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	sdk "github.com/FilenCloudDienste/filen-sdk-go/filen"
 	"os"
-	"slices"
+	"path/filepath"
 	"strings"
 )
 
@@ -27,7 +26,7 @@ func main() {
 		panic(err)
 	}
 
-	files, _, err := filen.ReadDirectory(baseFolderUUID)
+	_, _, err = filen.ReadDirectory(baseFolderUUID)
 	if err != nil {
 		panic(err)
 	}
@@ -41,7 +40,7 @@ func main() {
 		fmt.Printf("%#v\n", directory)
 	}*/
 
-	idx := slices.IndexFunc(files, func(file *sdk.File) bool { return file.Name == "asdf.txt" })
+	/*idx := slices.IndexFunc(files, func(file *sdk.File) bool { return file.Name == "asdf.txt" })
 	if idx == -1 {
 		panic(errors.New("file not found"))
 	}
@@ -49,7 +48,7 @@ func main() {
 	_, err = os.Create("downloaded/" + file.Name)
 	if err != nil {
 		panic(err)
-	}
+	}*/
 
 	/*start := time.Now()
 	err = filen.DownloadFile(file, destination)
@@ -108,7 +107,7 @@ func main() {
 	}
 	fmt.Printf("Data: \"%s\"\n", data)*/
 
-	directory, err := filen.CreateDirectory(baseFolderUUID, "test file created via SDK")
+	/*directory, err := filen.CreateDirectory(baseFolderUUID, "test file created via SDK")
 	if err != nil {
 		panic(err)
 	}
@@ -129,7 +128,22 @@ func main() {
 	err = filen.TrashDirectory(directory.UUID)
 	if err != nil {
 		panic(err)
+	}*/
+
+	directory, err := filen.CreateDirectory(baseFolderUUID, "uploads")
+	if err != nil {
+		panic(err)
 	}
+
+	uploadFile, err := os.Open("downloaded/large_sample-2mb.txt")
+	if err != nil {
+		panic(err)
+	}
+	file, err := filen.UploadFile(filepath.Base(uploadFile.Name()), directory.UUID, uploadFile)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Uploaded file: %#v\n", file)
 }
 
 func WriteSampleFile() {
