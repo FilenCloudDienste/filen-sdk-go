@@ -106,7 +106,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Data: %s\n", data)
+	fmt.Printf("Data: \"%s\"\n", data)
 }
 
 func WriteSampleFile() {

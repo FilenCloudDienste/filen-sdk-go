@@ -33,7 +33,7 @@ func (filen *Filen) DownloadFileInMemory(file *File) ([]byte, error) {
 	err := filen.DownloadFile(file, func(chunk int, data []byte) error {
 		chunkStart := chunk * chunkSize
 		chunkEnd := int(math.Min(float64(chunk+1)*float64(chunkSize), float64(file.Size)))
-		copy(fileData, data[chunkStart:chunkEnd])
+		copy(fileData[chunkStart:chunkEnd], data)
 		return nil
 	})
 	if err != nil {
