@@ -116,7 +116,7 @@ type UploadDoneRequest struct {
 	NameHashed string                 `json:"nameHashed"`
 	Size       crypto.EncryptedString `json:"size"`
 	Chunks     int                    `json:"chunks"`
-	Mime       crypto.EncryptedString `json:"mime"`
+	MimeType   crypto.EncryptedString `json:"mime"`
 	Rm         string                 `json:"rm"`
 	Metadata   crypto.EncryptedString `json:"metadata"`
 	Version    int                    `json:"version"`
@@ -159,13 +159,13 @@ type CreateDirectoryResponse struct {
 }
 
 // CreateDirectory calls /v3/dir/create
-func (client *Client) CreateDirectory(uuid string, metadata crypto.EncryptedString, nameHashed string, parentUUID string) (*CreateDirectoryResponse, error) {
+func (client *Client) CreateDirectory(uuid string, name crypto.EncryptedString, nameHashed string, parentUUID string) (*CreateDirectoryResponse, error) {
 	request := struct {
-		UUID              string `json:"uuid"`
-		EncryptedMetadata string `json:"name"`
-		NameHashed        string `json:"nameHashed"`
-		ParentUUID        string `json:"parent"`
-	}{uuid, string(metadata), nameHashed, parentUUID}
+		UUID       string                 `json:"uuid"`
+		Name       crypto.EncryptedString `json:"name"`
+		NameHashed string                 `json:"nameHashed"`
+		ParentUUID string                 `json:"parent"`
+	}{uuid, name, nameHashed, parentUUID}
 	response := &CreateDirectoryResponse{}
 	_, err := client.Request("POST", "/v3/dir/create", request, response)
 	if err != nil {
@@ -186,4 +186,60 @@ func (client *Client) TrashDirectory(uuid string) error {
 		return err
 	}
 	return nil
+}
+
+// /v3/dir
+
+type Directory struct {
+	UUID       string                 `json:"uuid"`
+	Name       crypto.EncryptedString `json:"nameEncrypted"`
+	NameHashed string                 `json:"nameHashed"`
+	ParentUUID string                 `json:"parent"`
+	Trash      bool                   `json:"trash"`
+	Favorited  bool                   `json:"favorited"`
+	Color      string                 `json:"color"`
+}
+
+// GetDirectory calls /v3/dir
+func (client *Client) GetDirectory(uuid string) (*Directory, error) {
+	request := struct {
+		UUID string `json:"uuid"`
+	}{uuid}
+	directory := &Directory{}
+	_, err := client.Request("POST", "/v3/dir", request, directory)
+	if err != nil {
+		return nil, err
+	}
+	return directory, nil
+}
+
+// /v3/file
+
+type File struct {
+	UUID       string                 `json:"uuid"`
+	Region     string                 `json:"region"`
+	Bucket     string                 `json:"bucket"`
+	Name       crypto.EncryptedString `json:"name"`
+	NameHashed string                 `json:"nameHashed"`
+	Size       crypto.EncryptedString `json:"sizeEncrypted"`
+	MimeType   crypto.EncryptedString `json:"mimeEncrypted"`
+	Metadata   crypto.EncryptedString `json:"metadata"`
+	Size2      int                    `json:"size"` //TODO ?
+	ParentUUID string                 `json:"parent"`
+	Versioned  bool                   `json:"versioned"`
+	Trash      bool                   `json:"trash"`
+	Version    int                    `json:"version"`
+}
+
+// GetFile calls /v3/file
+func (client *Client) GetFile(uuid string) (*File, error) {
+	request := struct {
+		UUID string `json:"uuid"`
+	}{uuid}
+	file := &File{}
+	_, err := client.Request("POST", "/v3/file", request, file)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
 }

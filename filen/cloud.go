@@ -50,30 +50,31 @@ func (filen *Filen) GetBaseFolderUUID() (string, error) {
 // PathToUUID identifies a cloud item by its path and returns its UUID.
 // Set the requireDirectory to differentiate between files and directories with the same path
 // (otherwise, the file will be found).
-func (filen *Filen) PathToUUID(path string, requireDirectory bool) (string, error) {
+func (filen *Filen) PathToUUID(path string, requireDirectory bool) (uuid string, isDirectory bool, err error) {
 	baseFolderUUID, err := filen.GetBaseFolderUUID()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	segments := strings.Split(path, "/")
 
 	currentPath := ""
-	currentUUID := baseFolderUUID
+	uuid = baseFolderUUID
 SegmentsLoop:
 	for _, segment := range segments {
 		if segment == "" {
 			continue
 		}
 
-		files, directories, err := filen.ReadDirectory(currentUUID)
+		files, directories, err := filen.ReadDirectory(uuid)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if !requireDirectory {
 			for _, file := range files {
 				if file.Name == segment {
-					currentUUID = file.UUID
+					uuid = file.UUID
+					isDirectory = false
 					currentPath = currentPath + "/" + segment
 					continue SegmentsLoop
 				}
@@ -81,14 +82,75 @@ SegmentsLoop:
 		}
 		for _, directory := range directories {
 			if directory.Name == segment {
-				currentUUID = directory.UUID
+				uuid = directory.UUID
+				isDirectory = true
 				currentPath = currentPath + "/" + segment
 				continue SegmentsLoop
 			}
 		}
-		return "", errors.New(fmt.Sprintf("item %s not found in directory %s", segment, currentPath))
+		return "", false, errors.New(fmt.Sprintf("item %s not found in directory %s", segment, currentPath))
 	}
-	return currentUUID, nil
+	return
+}
+
+// GetFile fetches info about a file based on its UUID.
+func (filen *Filen) GetFile(uuid string) (*File, error) {
+	// fetch info
+	file, err := filen.client.GetFile(uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	// decrypt name
+	name, err := crypto.DecryptMetadataAllKeys(file.Name, filen.MasterKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	// decrypt mimeType
+	mimeType, err := crypto.DecryptMetadataAllKeys(file.MimeType, filen.MasterKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	return &File{
+		UUID:          file.UUID,
+		Name:          name,
+		Size:          int64(file.Size2), //TODO ?
+		MimeType:      mimeType,
+		EncryptionKey: nil,         //TODO ?
+		Created:       time.Time{}, //TODO ?
+		LastModified:  time.Time{}, //TODO ?
+		ParentUUID:    file.ParentUUID,
+		Favorited:     false, //TODO ?
+		Region:        file.Region,
+		Bucket:        file.Bucket,
+		Chunks:        0, //TODO ?
+	}, nil
+}
+
+// GetDirectory fetches info about a directory based on its UUID.
+func (filen *Filen) GetDirectory(uuid string) (*Directory, error) {
+	// fetch info
+	directory, err := filen.client.GetDirectory(uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	// decrypt name
+	name, err := crypto.DecryptMetadataAllKeys(directory.Name, filen.MasterKeys)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Directory{
+		UUID:       directory.UUID,
+		Name:       name,
+		ParentUUID: directory.ParentUUID,
+		Color:      directory.Color,
+		Created:    time.Time{}, //TODO ?
+		Favorited:  directory.Favorited,
+	}, nil
 }
 
 // ReadDirectory fetches the files and directories that are children of a directory (specified by UUID).
@@ -109,7 +171,7 @@ func (filen *Filen) ReadDirectory(uuid string) ([]*File, []*Directory, error) {
 		var metadata struct {
 			Name         string `json:"name"`
 			Size         int    `json:"size"`
-			Mime         string `json:"mime"`
+			MimeType     string `json:"mime"`
 			Key          string `json:"key"`
 			LastModified int    `json:"lastModified"`
 		}
@@ -122,7 +184,7 @@ func (filen *Filen) ReadDirectory(uuid string) ([]*File, []*Directory, error) {
 			UUID:          file.UUID,
 			Name:          metadata.Name,
 			Size:          int64(metadata.Size),
-			MimeType:      metadata.Mime,
+			MimeType:      metadata.MimeType,
 			EncryptionKey: []byte(metadata.Key),
 			Created:       util.TimestampToTime(int64(file.Timestamp)),
 			LastModified:  util.TimestampToTime(int64(metadata.LastModified)),

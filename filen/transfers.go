@@ -177,7 +177,7 @@ WaitForAll:
 		return err
 	}
 	nameHashed := hex.EncodeToString(crypto.RunSHA521([]byte(fileName)))
-	mime, err := crypto.EncryptMetadata("text/plain", key)
+	mimeType, err := crypto.EncryptMetadata("text/plain", key)
 	if err != nil {
 		return err
 	}
@@ -190,7 +190,7 @@ WaitForAll:
 	metadata := struct {
 		Name         string `json:"name"`
 		Size         int    `json:"size"`
-		Mime         string `json:"mime"`
+		MimeType     string `json:"mime"`
 		Key          string `json:"key"`
 		LastModified int    `json:"lastModified"`
 		Created      int    `json:"created"`
@@ -211,7 +211,7 @@ WaitForAll:
 		NameHashed: nameHashed,
 		Size:       sizeEncrypted,
 		Chunks:     chunks,
-		Mime:       mime,
+		MimeType:   mimeType,
 		Rm:         crypto.GenerateRandomString(32),
 		Metadata:   metadataEncrypted,
 		Version:    2,
