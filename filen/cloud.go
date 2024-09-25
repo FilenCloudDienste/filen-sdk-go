@@ -47,9 +47,30 @@ func (filen *Filen) GetBaseFolderUUID() (string, error) {
 	return userBaseFolder.UUID, nil
 }
 
+// FindItemUUID finds a cloud item by its path and returns its UUID.
+// Use this instead of FindItem to correctly handle paths pointing to the base directory.
+func (filen *Filen) FindItemUUID(path string, requireDirectory bool) (string, error) {
+	if len(strings.Join(strings.Split(path, "/"), "")) == 0 { // empty path
+		baseFolderUUID, err := filen.GetBaseFolderUUID()
+		if err != nil {
+			return "", err
+		}
+		return baseFolderUUID, nil
+	} else {
+		file, directory, err := filen.FindItem(path, requireDirectory)
+		if err != nil {
+			return "", err
+		}
+		if file != nil {
+			return file.UUID, nil
+		} else {
+			return directory.UUID, nil
+		}
+	}
+}
+
 // FindItem find a cloud item by its path and returns it (either the File or the Directory will be returned).
-// Set the requireDirectory to differentiate between files and directories with the same path
-// (otherwise, the file will be found).
+// Set the requireDirectory to differentiate between files and directories with the same path (otherwise, the file will be found).
 func (filen *Filen) FindItem(path string, requireDirectory bool) (*File, *Directory, error) {
 	baseFolderUUID, err := filen.GetBaseFolderUUID()
 	if err != nil {
@@ -57,6 +78,9 @@ func (filen *Filen) FindItem(path string, requireDirectory bool) (*File, *Direct
 	}
 
 	segments := strings.Split(path, "/")
+	if len(strings.Join(segments, "")) == 0 {
+		return nil, nil, errors.New(fmt.Sprintf("no segments in path %s", path))
+	}
 
 	currentPath := ""
 	currentUUID := baseFolderUUID
@@ -90,7 +114,7 @@ SegmentsLoop:
 		}
 		return nil, nil, errors.New(fmt.Sprintf("item %s not found in directory %s", segment, currentPath))
 	}
-	return nil, nil, nil // not reachable
+	return nil, nil, errors.New("unreachable")
 }
 
 // ReadDirectory fetches the files and directories that are children of a directory (specified by UUID).
