@@ -48,6 +48,7 @@ func (filen *Filen) GetBaseFolderUUID() (string, error) {
 }
 
 // FindItemUUID finds a cloud item by its path and returns its UUID.
+// Returns an empty string if none was found.
 // Use this instead of FindItem to correctly handle paths pointing to the base directory.
 func (filen *Filen) FindItemUUID(path string, requireDirectory bool) (string, error) {
 	if len(strings.Join(strings.Split(path, "/"), "")) == 0 { // empty path
@@ -63,14 +64,17 @@ func (filen *Filen) FindItemUUID(path string, requireDirectory bool) (string, er
 		}
 		if file != nil {
 			return file.UUID, nil
-		} else {
+		}
+		if directory != nil {
 			return directory.UUID, nil
 		}
+		return "", nil
 	}
 }
 
 // FindItem find a cloud item by its path and returns it (either the File or the Directory will be returned).
-// Set the requireDirectory to differentiate between files and directories with the same path (otherwise, the file will be found).
+// Set requireDirectory to differentiate between files and directories with the same path (otherwise, the file will be found).
+// Returns nil for both File and Directory if none was found.
 func (filen *Filen) FindItem(path string, requireDirectory bool) (*File, *Directory, error) {
 	baseFolderUUID, err := filen.GetBaseFolderUUID()
 	if err != nil {
@@ -82,7 +86,6 @@ func (filen *Filen) FindItem(path string, requireDirectory bool) (*File, *Direct
 		return nil, nil, errors.New(fmt.Sprintf("no segments in path %s", path))
 	}
 
-	currentPath := ""
 	currentUUID := baseFolderUUID
 SegmentsLoop:
 	for segmentIdx, segment := range segments {
@@ -106,15 +109,55 @@ SegmentsLoop:
 				if segmentIdx == len(segments)-1 {
 					return nil, directory, nil
 				} else {
-					currentPath = currentPath + "/" + segment
 					currentUUID = directory.UUID
 					continue SegmentsLoop
 				}
 			}
 		}
-		return nil, nil, errors.New(fmt.Sprintf("item %s not found in directory %s", segment, currentPath))
+		return nil, nil, nil
 	}
 	return nil, nil, errors.New("unreachable")
+}
+
+// FindDirectoryOrCreate finds a cloud directory by its path and returns its UUID.
+// If the directory cannot be found, it (and all non-existent parent directories) will be created.
+func (filen *Filen) FindDirectoryOrCreate(path string) (string, error) {
+	baseFolderUUID, err := filen.GetBaseFolderUUID()
+	if err != nil {
+		return "", err
+	}
+
+	segments := strings.Split(path, "/")
+	if len(strings.Join(segments, "")) == 0 {
+		return baseFolderUUID, nil
+	}
+
+	currentUUID := baseFolderUUID
+SegmentsLoop:
+	for _, segment := range segments {
+		if segment == "" {
+			continue
+		}
+
+		_, directories, err := filen.ReadDirectory(currentUUID)
+		if err != nil {
+			return "", err
+		}
+		for _, directory := range directories {
+			if directory.Name == segment {
+				// directory found
+				currentUUID = directory.UUID
+				continue SegmentsLoop
+			}
+		}
+		// create directory
+		directory, err := filen.CreateDirectory(currentUUID, segment)
+		if err != nil {
+			return "", err
+		}
+		currentUUID = directory.UUID
+	}
+	return currentUUID, nil
 }
 
 // ReadDirectory fetches the files and directories that are children of a directory (specified by UUID).
