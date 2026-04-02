@@ -165,6 +165,7 @@ func NewFromTSConfig(tsconfig TSConfig) (*Filen, error) {
 			PublicKey:                 *publicKey,
 			HMACKey:                   crypto.MakeHMACKey(privateKey),
 			BaseFolder:                types.NewRootDirectory(tsconfig.BaseFolderUUID),
+			lock:                      NewBackendLock(),
 		}, nil
 	case 3:
 		dek, err := crypto.MakeEncryptionKeyFromStr(tsconfig.MasterKeys[0])
@@ -187,6 +188,7 @@ func NewFromTSConfig(tsconfig TSConfig) (*Filen, error) {
 			PublicKey:                 *public,
 			HMACKey:                   crypto.MakeHMACKey(private),
 			BaseFolder:                types.NewRootDirectory(tsconfig.BaseFolderUUID),
+			lock:                      NewBackendLock(),
 		}, nil
 	default:
 		return nil, fmt.Errorf("invalid auth version: %d", tsconfig.AuthVersion)
