@@ -88,6 +88,7 @@ func (s *serializableFilen) deserialize() (*Filen, error) {
 		PublicKey:   privateKey.PublicKey,
 		HMACKey:     s.HMACKey,
 		BaseFolder:  types.NewRootDirectory(s.BaseFolderUUID),
+		lock:        NewBackendLock(),
 	}, nil
 }
 
