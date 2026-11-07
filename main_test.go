@@ -18,6 +18,7 @@ import (
 	"time"
 
 	sdk "github.com/FilenCloudDienste/filen-sdk-go/filen"
+	"github.com/FilenCloudDienste/filen-sdk-go/filen/client"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/search"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/types"
@@ -1065,6 +1066,54 @@ func TestShareAndLink(t *testing.T) {
 			t.Fatal("moved file uuid not locally updated")
 		}
 	})
+}
+
+// TestChunkedUploadIntoLinkedDir uploads a file chunk by chunk with
+// NewFileUpload, UploadChunk and CompleteFileUpload, the way a caller that
+// sends chunks in parallel does (rclone's multi-thread upload, for example).
+// The file must join the parent directory's public link, just like a file
+// sent with UploadFile.
+func TestChunkedUploadIntoLinkedDir(t *testing.T) {
+	ctx := context.Background()
+	leftover, err := filen.FindDirectory(ctx, path.Join(baseTestDir.Name, "chunkedLinked"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if leftover != nil {
+		if err = filen.TrashDirectory(ctx, leftover); err != nil {
+			t.Fatal(err)
+		}
+	}
+	linkedDir, err := filen.CreateDirectory(ctx, baseTestDir, "chunkedLinked")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = filen.PublicLinkItem(ctx, linkedDir); err != nil {
+		t.Fatal(err)
+	}
+
+	iFile, err := types.NewIncompleteFile(filen.FileEncryptionVersion, "chunked.txt", "", time.Now(), time.Now(), linkedDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("Sample!")
+	fu := filen.NewFileUpload(iFile)
+	fu.Hasher.Write(data)
+	resp, err := filen.UploadChunk(ctx, fu, 0, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bucketAndRegion := make(chan client.V3UploadResponse, 1)
+	bucketAndRegion <- *resp
+	close(bucketAndRegion)
+	file, err := filen.CompleteFileUpload(ctx, fu, bucketAndRegion, int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = requireLinked(ctx, file); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func writeTestData(writer io.Writer, length int) error {

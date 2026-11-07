@@ -174,18 +174,7 @@ func (api *Filen) UploadFile(ctx context.Context, file *types.IncompleteFile, r 
 		return nil, err
 	}
 
-	completeFile, err := api.CompleteFileUpload(ctx, fu, bucketAndRegion, size)
-	if err != nil {
-		return nil, err
-	}
-
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error { return api.updateItemWithMaybeSharedParent(gCtx, completeFile) })
-	g.Go(func() error { return api.updateSearchHashes(gCtx, completeFile) })
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-	return completeFile, nil
+	return api.CompleteFileUpload(ctx, fu, bucketAndRegion, size)
 }
 
 func (api *Filen) uploadFileChunks(ctx context.Context, fu *FileUpload, bucketAndRegion chan client.V3UploadResponse, file *types.IncompleteFile, r io.Reader) (int64, error) {
@@ -226,6 +215,10 @@ func (api *Filen) uploadFileChunks(ctx context.Context, fu *FileUpload, bucketAn
 	return size, nil
 }
 
+// CompleteFileUpload finalizes an upload after its chunks, if any, were sent with UploadChunk.
+// It also adds the new file to the parent directory's shares and public links
+// and updates the search index, so a file uploaded chunk by chunk ends up in
+// the same state as one uploaded with UploadFile.
 func (api *Filen) CompleteFileUpload(ctx context.Context, fu *FileUpload, bucketAndRegion chan client.V3UploadResponse, size int64) (*types.File, error) {
 	var (
 		completeFile *types.File
@@ -249,6 +242,13 @@ func (api *Filen) CompleteFileUpload(ctx context.Context, fu *FileUpload, bucket
 		case <-ctx.Done():
 			return nil, fmt.Errorf("context done %w", context.Cause(ctx))
 		}
+	}
+
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error { return api.updateItemWithMaybeSharedParent(gCtx, completeFile) })
+	g.Go(func() error { return api.updateSearchHashes(gCtx, completeFile) })
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("update parent shares, links and search index: %w", err)
 	}
 	return completeFile, nil
 }
