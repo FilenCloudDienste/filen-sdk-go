@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +19,6 @@ import (
 	sdk "github.com/FilenCloudDienste/filen-sdk-go/filen"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/client"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
-	"github.com/FilenCloudDienste/filen-sdk-go/filen/search"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/types"
 	"github.com/joho/godotenv"
 	"golang.org/x/sync/errgroup"
@@ -114,30 +112,6 @@ func getCompatTestFile(parent types.DirectoryInterface) (*types.IncompleteFile, 
 	return incompleteFile, specificFile, nil
 }
 
-type nameSplitterTestFile struct {
-	Name1  string   `json:"name1"`
-	Split1 []string `json:"split1"`
-	Name2  string   `json:"name2"`
-	Split2 []string `json:"split2"`
-	Name3  string   `json:"name3"`
-	Split3 []string `json:"split3"`
-	Name4  string   `json:"name4"`
-	Split4 []string `json:"split4"`
-}
-
-func makeNameSplitterTestFile() nameSplitterTestFile {
-	return nameSplitterTestFile{
-		Name1:  "General_Invitation_-_the_ECSO_Award_Finals_2024.docx",
-		Split1: search.NameSplitter("General_Invitation_-_the_ECSO_Award_Finals_2024.docx", 2, 16),
-		Name2:  "Screenshot 2023-05-16 201840.png",
-		Split2: search.NameSplitter("Screenshot 2023-05-16 201840.png", 2, 16),
-		Name3:  "!service-invoice-657c56116e4f6947a80001cc.pdf",
-		Split3: search.NameSplitter("!service-invoice-657c56116e4f6947a80001cc.pdf", 2, 16),
-		Name4:  "файл.txt",
-		Split4: search.NameSplitter("файл.txt", 2, 16),
-	}
-}
-
 // TestUploadsToGoDir uploads test files and directories to the "go" directory
 // this is so the TS sdk can validate these files on its side and check if they are compatible
 // there should ideally be a TestDownloadsFromTSDir that validates files from the TS sdk
@@ -223,20 +197,6 @@ func TestUploadsToGoDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Run("NameSplitter", func(t *testing.T) {
-		b, err := json.Marshal(makeNameSplitterTestFile())
-		if err != nil {
-			t.Fatal(err)
-		}
-		testNameSplitterFile, err := types.NewIncompleteFile(filen.FileEncryptionVersion, "nameSplitter.json", "", time.Now(), time.Now(), goDir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_, err = filen.UploadFile(context.Background(), testNameSplitterFile, bytes.NewReader(b))
-		if err != nil {
-			t.Fatal(err)
-		}
-	})
 }
 
 func TestDownloadsFromTSDir(t *testing.T) {
@@ -323,32 +283,6 @@ func TestDownloadsFromTSDir(t *testing.T) {
 			t.Fatalf("compatibility file objects did not match; go side:\n%#v\nTS side:\n%#v", goSideCompatFile, tsSideCompatFile.IncompleteFile)
 		}
 	}
-
-	t.Run("NameSplitter", func(t *testing.T) {
-		goSideNameSplitterStruct := makeNameSplitterTestFile()
-		tsSideNameSplitterFile, err := filen.FindFile(context.Background(), path.Join("compat-ts", "nameSplitter.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		tsSideNameSplitterBytes, err := io.ReadAll(filen.GetDownloadReader(context.Background(), tsSideNameSplitterFile))
-		if err != nil {
-			t.Fatal(err)
-		}
-		tsSideNameSplitterStruct := &nameSplitterTestFile{}
-		err = json.Unmarshal(tsSideNameSplitterBytes, tsSideNameSplitterStruct)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		search.SortTokens(tsSideNameSplitterStruct.Split1)
-		search.SortTokens(tsSideNameSplitterStruct.Split2)
-		search.SortTokens(tsSideNameSplitterStruct.Split3)
-		search.SortTokens(tsSideNameSplitterStruct.Split4)
-
-		if !reflect.DeepEqual(goSideNameSplitterStruct, *tsSideNameSplitterStruct) {
-			t.Fatalf("nameSplitter file contents did not match. Go side:\n%#v\nTS side:\n%#v", goSideNameSplitterStruct, tsSideNameSplitterStruct)
-		}
-	})
 }
 
 func TestReadDirectories(t *testing.T) {

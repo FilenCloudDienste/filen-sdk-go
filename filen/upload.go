@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	"github.com/zeebo/blake3"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/client"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
@@ -164,7 +163,7 @@ func (api *Filen) completeUploadEmpty(ctx context.Context, fu *FileUpload) (*typ
 // - Parallel upload of chunks
 // - Calculating file hash for integrity verification
 // - Finalizing the upload with appropriate metadata
-// - Updating search indexes and shared parent metadata
+// - Updating shared parent metadata
 func (api *Filen) UploadFile(ctx context.Context, file *types.IncompleteFile, r io.Reader) (*types.File, error) {
 	fu := api.NewFileUpload(file)
 	bucketAndRegion := make(chan client.V3UploadResponse, 1)
@@ -216,9 +215,9 @@ func (api *Filen) uploadFileChunks(ctx context.Context, fu *FileUpload, bucketAn
 }
 
 // CompleteFileUpload finalizes an upload after its chunks, if any, were sent with UploadChunk.
-// It also adds the new file to the parent directory's shares and public links
-// and updates the search index, so a file uploaded chunk by chunk ends up in
-// the same state as one uploaded with UploadFile.
+// It also adds the new file to the parent directory's shares and public links,
+// so a file uploaded chunk by chunk ends up in the same state as one uploaded
+// with UploadFile.
 func (api *Filen) CompleteFileUpload(ctx context.Context, fu *FileUpload, bucketAndRegion chan client.V3UploadResponse, size int64) (*types.File, error) {
 	var (
 		completeFile *types.File
@@ -244,11 +243,8 @@ func (api *Filen) CompleteFileUpload(ctx context.Context, fu *FileUpload, bucket
 		}
 	}
 
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error { return api.updateItemWithMaybeSharedParent(gCtx, completeFile) })
-	g.Go(func() error { return api.updateSearchHashes(gCtx, completeFile) })
-	if err := g.Wait(); err != nil {
-		return nil, fmt.Errorf("update parent shares, links and search index: %w", err)
+	if err := api.updateItemWithMaybeSharedParent(ctx, completeFile); err != nil {
+		return nil, fmt.Errorf("update parent shares and links: %w", err)
 	}
 	return completeFile, nil
 }

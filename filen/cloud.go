@@ -12,12 +12,10 @@ import (
 
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/client"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/crypto"
-	"github.com/FilenCloudDienste/filen-sdk-go/filen/search"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/types"
 	"github.com/FilenCloudDienste/filen-sdk-go/filen/util"
 	"github.com/google/uuid"
 	"github.com/rclone/rclone/fs"
-	"golang.org/x/sync/errgroup"
 )
 
 // FindItem finds a cloud item (file or directory) by its path and returns it.
@@ -301,7 +299,7 @@ func (api *Filen) TrashFile(ctx context.Context, file types.File) error {
 }
 
 // CreateDirectoryWithParentUUID creates a new directory as a child of the specified parent UUID.
-// It handles encryption of directory metadata and updating search indexes.
+// It handles encryption of directory metadata.
 // Returns the newly created Directory object.
 func (api *Filen) CreateDirectoryWithParentUUID(ctx context.Context, parentUUID string, name string) (*types.Directory, error) {
 	if strings.ContainsRune(name, '/') {
@@ -338,10 +336,7 @@ func (api *Filen) CreateDirectoryWithParentUUID(ctx context.Context, parentUUID 
 		Favorited:  false,
 	}
 
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error { return api.updateItemWithMaybeSharedParent(gCtx, dir) })
-	g.Go(func() error { return api.updateSearchHashes(gCtx, dir) })
-	if err := g.Wait(); err != nil {
+	if err := api.updateItemWithMaybeSharedParent(ctx, dir); err != nil {
 		return nil, err
 	}
 	return dir, nil
@@ -552,7 +547,7 @@ func (api *Filen) updateDirMeta(ctx context.Context, dir *types.Directory, metaE
 
 // UpdateMeta updates the metadata of a file or directory on the server.
 // This operation requires a lock to prevent race conditions with other operations.
-// It also updates search indexes and shared parent metadata.
+// It also updates shared parent metadata.
 func (api *Filen) UpdateMeta(ctx context.Context, item types.NonRootFileSystemObject) error {
 	err := api.Lock(ctx)
 	if err != nil {
@@ -578,10 +573,7 @@ func (api *Filen) UpdateMeta(ctx context.Context, item types.NonRootFileSystemOb
 		return fmt.Errorf("update meta: %w", err)
 	}
 
-	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error { return api.updateMaybeSharedItem(gCtx, item) })
-	g.Go(func() error { return api.updateSearchHashes(gCtx, item) })
-	return g.Wait()
+	return api.updateMaybeSharedItem(ctx, item)
 }
 
 // Rename renames a file or directory.
@@ -608,20 +600,4 @@ func (api *Filen) Rename(ctx context.Context, item types.NonRootFileSystemObject
 		return fmt.Errorf("unknown item type")
 	}
 	return nil
-}
-
-// updateSearchHashes updates the search index for a file or directory.
-// This is called automatically when items are created, renamed, or moved.
-// It generates search hashes that enable encrypted search functionality.
-func (api *Filen) updateSearchHashes(ctx context.Context, item types.NonRootFileSystemObject) error {
-	var typ string
-	if _, ok := item.(*types.Directory); ok {
-		typ = "directory"
-	} else if _, ok := item.(*types.File); ok {
-		typ = "file"
-	} else {
-		return fmt.Errorf("unknown item type")
-	}
-	nameHashes := search.GenerateSearchIndexHashes(item.GetName(), api.HMACKey, item.GetUUID(), typ)
-	return api.Client.PostV3SearchAdd(ctx, nameHashes)
 }
