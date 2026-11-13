@@ -695,6 +695,46 @@ func TestCaseInsensitivePaths(t *testing.T) {
 	})
 }
 
+func TestMoveDirectoryOverwrite(t *testing.T) {
+	parentOrRoot, err := filen.FindDirectoryOrCreate(context.Background(), "go/overwrite")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err := filen.TrashDirectory(context.Background(), parentOrRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+	existing, err := filen.FindDirectoryOrCreate(context.Background(), "go/overwrite/dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	movedOrRoot, err := filen.FindDirectoryOrCreate(context.Background(), "go/overwrite/src/dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved, ok := movedOrRoot.(*types.Directory)
+	if !ok {
+		t.Fatal("movedOrRoot is not a normal directory")
+	}
+
+	err = filen.MoveItem(context.Background(), moved, parentOrRoot.GetUUID(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundDir, err := filen.FindDirectory(context.Background(), "go/overwrite/dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if foundDir == nil {
+		t.Fatal("moved directory not found")
+	}
+	if foundDir.GetUUID() != moved.GetUUID() {
+		t.Fatalf("expected moved directory %s, got %s (existing was %s)", moved.GetUUID(), foundDir.GetUUID(), existing.GetUUID())
+	}
+}
+
 func TestEmptyFileActions(t *testing.T) {
 	osFile, err := os.Open("test_files/empty.txt")
 	if err != nil {

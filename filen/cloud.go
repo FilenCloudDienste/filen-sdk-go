@@ -437,7 +437,7 @@ func (api *Filen) moveDir(ctx context.Context, dir *types.Directory, newParentUU
 	}
 	if resp.Exists {
 		if overwrite {
-			err := api.Client.PostV3FileTrash(ctx, resp.UUID)
+			err := api.Client.PostV3DirTrash(ctx, resp.UUID)
 			if err != nil {
 				return err
 			}
