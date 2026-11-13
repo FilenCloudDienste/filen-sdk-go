@@ -616,7 +616,7 @@ func TestCaseInsensitivePaths(t *testing.T) {
 	})
 
 	t.Run("FindDirectory", func(t *testing.T) {
-		dirOrRoot, err := filen.FindDirectory(context.Background(), "GO/CASEDIR")
+		dirOrRoot, err := filen.FindDirectory(context.Background(), "/GO/CASEDIR/")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -654,6 +654,18 @@ func TestCaseInsensitivePaths(t *testing.T) {
 		}
 	})
 
+	t.Run("FindItemThroughFile", func(t *testing.T) {
+		for _, p := range []string{"go/CaseDir/Case.txt/x", "go/casedir/CASE.TXT/x"} {
+			item, err := filen.FindItem(context.Background(), p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if item != nil {
+				t.Fatalf("expected no item at %s, got %#v", p, item)
+			}
+		}
+	})
+
 	t.Run("MoveIntoOwnParent", func(t *testing.T) {
 		err := filen.MoveItem(context.Background(), file, directory.GetUUID(), true)
 		if err != nil {
@@ -665,6 +677,20 @@ func TestCaseInsensitivePaths(t *testing.T) {
 		}
 		if foundFile == nil {
 			t.Fatal("file was trashed by moving it into its own parent")
+		}
+	})
+
+	t.Run("MoveDirectoryIntoOwnParent", func(t *testing.T) {
+		err := filen.MoveItem(context.Background(), directory, baseTestDir.GetUUID(), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		foundDir, err := filen.FindDirectory(context.Background(), "go/CaseDir")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if foundDir == nil {
+			t.Fatal("directory was trashed by moving it into its own parent")
 		}
 	})
 }

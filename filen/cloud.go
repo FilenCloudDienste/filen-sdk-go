@@ -25,23 +25,24 @@ import (
 // Returns nil if the item is not found.
 func (api *Filen) FindItem(ctx context.Context, path string) (types.FileSystemObject, error) {
 	var currentDir types.DirectoryInterface = &api.BaseFolder
-	segments := strings.Split(path, "/")
-	if len(strings.Join(segments, "")) == 0 {
+	segments := strings.FieldsFunc(path, func(r rune) bool {
+		return r == '/'
+	})
+	if len(segments) == 0 {
 		return currentDir, nil
 	}
 
 SegmentsLoop:
 	for segmentIdx, segment := range segments {
-		if segment == "" {
-			continue
-		}
-
 		files, directories, err := api.ReadDirectory(ctx, currentDir)
 		if err != nil {
 			return nil, fmt.Errorf("read directory: %w", err)
 		}
-		if file := findByName(files, segment); file != nil {
-			return file, nil
+		// a file can only be the last segment, a path through a file doesn't exist
+		if segmentIdx == len(segments)-1 {
+			if file := findByName(files, segment); file != nil {
+				return file, nil
+			}
 		}
 		if directory := findByName(directories, segment); directory != nil {
 			if segmentIdx == len(segments)-1 {
