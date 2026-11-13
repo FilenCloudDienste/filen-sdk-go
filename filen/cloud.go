@@ -20,6 +20,7 @@ import (
 
 // FindItem finds a cloud item (file or directory) by its path and returns it.
 // The path should be in the format "dir1/dir2/item", with "/" as the separator.
+// Names are matched like Filen matches them, ignoring case (see NamesEqual).
 // If the path is empty or "/", it returns the root directory.
 // Returns nil if the item is not found.
 func (api *Filen) FindItem(ctx context.Context, path string) (types.FileSystemObject, error) {
@@ -39,24 +40,42 @@ SegmentsLoop:
 		if err != nil {
 			return nil, fmt.Errorf("read directory: %w", err)
 		}
-		for _, file := range files {
-			if file.Name == segment {
-				return file, nil
-			}
+		if file := findByName(files, segment); file != nil {
+			return file, nil
 		}
-		for _, directory := range directories {
-			if directory.Name == segment {
-				if segmentIdx == len(segments)-1 {
-					return directory, nil
-				} else {
-					currentDir = directory
-					continue SegmentsLoop
-				}
+		if directory := findByName(directories, segment); directory != nil {
+			if segmentIdx == len(segments)-1 {
+				return directory, nil
 			}
+			currentDir = directory
+			continue SegmentsLoop
 		}
 		return nil, nil
 	}
 	return nil, nil
+}
+
+// NamesEqual reports whether Filen treats two file or directory names as the same name.
+// Filen compares names by their lowercase hash (see HashFileName), so names which differ only in case are equal.
+func NamesEqual(a string, b string) bool {
+	return a == b || strings.ToLower(a) == strings.ToLower(b)
+}
+
+// findByName returns the item called name, or nil if there is none.
+// An exact match is preferred over one which differs only in case.
+func findByName[T types.FileSystemObject](items []T, name string) T {
+	var match T
+	found := false
+	for _, item := range items {
+		if item.GetName() == name {
+			return item
+		}
+		if !found && NamesEqual(item.GetName(), name) {
+			match = item
+			found = true
+		}
+	}
+	return match
 }
 
 // FindFile finds a cloud item by its path and then tries to map it to a file.
@@ -112,12 +131,9 @@ SegmentsLoop:
 		if err != nil {
 			return nil, err
 		}
-		for _, directory := range directories {
-			if directory.Name == segment {
-				// directory found
-				currentDir = directory
-				continue SegmentsLoop
-			}
+		if directory := findByName(directories, segment); directory != nil {
+			currentDir = directory
+			continue SegmentsLoop
 		}
 		// create directory
 		directory, err := api.CreateDirectory(ctx, currentDir, segment)
@@ -381,6 +397,11 @@ func (api *Filen) moveFile(ctx context.Context, file *types.File, newParentUUID 
 	if err != nil {
 		return fmt.Errorf("FileExists: %w", err)
 	}
+	if resp.Exists && resp.UUID == file.GetUUID() {
+		// the file is already in newParentUUID, and with case-insensitive names
+		// the existing item can be the file itself, which must not be trashed
+		return nil
+	}
 	if resp.Exists {
 		if overwrite {
 			err := api.Client.PostV3FileTrash(ctx, resp.UUID)
@@ -407,6 +428,11 @@ func (api *Filen) moveDir(ctx context.Context, dir *types.Directory, newParentUU
 	resp, err := api.DirExists(ctx, newParentUUID, dir.GetName())
 	if err != nil {
 		return fmt.Errorf("DirExists: %w", err)
+	}
+	if resp.Exists && resp.UUID == dir.GetUUID() {
+		// the directory is already in newParentUUID, and with case-insensitive names
+		// the existing item can be the directory itself, which must not be trashed
+		return nil
 	}
 	if resp.Exists {
 		if overwrite {

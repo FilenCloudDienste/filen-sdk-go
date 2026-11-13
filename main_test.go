@@ -580,6 +580,95 @@ func TestDirectoryActions(t *testing.T) {
 	})
 }
 
+func TestCaseInsensitivePaths(t *testing.T) {
+	var (
+		directory *types.Directory
+		file      *types.File
+	)
+	if !t.Run("Create", func(t *testing.T) {
+		dirOrRoot, err := filen.FindDirectoryOrCreate(context.Background(), "go/CaseDir")
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir, ok := dirOrRoot.(*types.Directory)
+		if !ok {
+			t.Fatal("dirOrRoot is not a normal directory")
+		}
+		directory = dir
+	}) {
+		return
+	}
+	defer func() {
+		err := filen.TrashDirectory(context.Background(), directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	t.Run("FindDirectoryOrCreate", func(t *testing.T) {
+		dirOrRoot, err := filen.FindDirectoryOrCreate(context.Background(), "go/casedir")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dirOrRoot.GetUUID() != directory.GetUUID() {
+			t.Fatalf("expected directory %s, got %s", directory.GetUUID(), dirOrRoot.GetUUID())
+		}
+	})
+
+	t.Run("FindDirectory", func(t *testing.T) {
+		dirOrRoot, err := filen.FindDirectory(context.Background(), "GO/CASEDIR")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if dirOrRoot == nil {
+			t.Fatal("directory not found")
+		}
+		if dirOrRoot.GetUUID() != directory.GetUUID() {
+			t.Fatalf("expected directory %s, got %s", directory.GetUUID(), dirOrRoot.GetUUID())
+		}
+	})
+
+	if !t.Run("Upload", func(t *testing.T) {
+		incompleteFile, err := types.NewIncompleteFile(filen.FileEncryptionVersion, "Case.txt", "", time.Now(), time.Now(), directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err = filen.UploadFile(context.Background(), incompleteFile, bytes.NewReader([]byte("case")))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}) {
+		return
+	}
+
+	t.Run("FindFile", func(t *testing.T) {
+		foundFile, err := filen.FindFile(context.Background(), "go/casedir/case.TXT")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if foundFile == nil {
+			t.Fatal("file not found")
+		}
+		if foundFile.GetUUID() != file.GetUUID() {
+			t.Fatalf("expected file %s, got %s", file.GetUUID(), foundFile.GetUUID())
+		}
+	})
+
+	t.Run("MoveIntoOwnParent", func(t *testing.T) {
+		err := filen.MoveItem(context.Background(), file, directory.GetUUID(), true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		foundFile, err := filen.FindFile(context.Background(), "go/CaseDir/Case.txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if foundFile == nil {
+			t.Fatal("file was trashed by moving it into its own parent")
+		}
+	})
+}
+
 func TestEmptyFileActions(t *testing.T) {
 	osFile, err := os.Open("test_files/empty.txt")
 	if err != nil {
