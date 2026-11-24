@@ -1188,7 +1188,11 @@ func TestChunkedUploadIntoLinkedDir(t *testing.T) {
 	data := []byte("Sample!")
 	fu := filen.NewFileUpload(iFile)
 	fu.Hasher.Write(data)
-	resp, err := filen.UploadChunk(ctx, fu, 0, data)
+	chunk := fu.NewChunkBuffer()
+	if _, err := chunk.Fill(bytes.NewReader(data)); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := filen.UploadChunk(ctx, fu, 0, chunk)
 	if err != nil {
 		t.Fatal(err)
 	}

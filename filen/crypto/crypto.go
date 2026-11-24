@@ -371,16 +371,20 @@ func MakeEncryptionKeyFromUnknownStr(key string) (*EncryptionKey, error) {
 	}
 }
 
-func (key *EncryptionKey) encrypt(nonce []byte, data []byte) []byte {
-	return key.Cipher.Seal(data[:0], nonce, data, nil)
-}
+// NonceSize is the length of the nonce that prefixes encrypted file data.
+const NonceSize = 12
 
-// EncryptData encrypts file data using the encryption key
-// generates a nonce and prepends it to the data
-func (key *EncryptionKey) EncryptData(data []byte) []byte {
-	nonce := GenerateRandomBytes(12)
-	data = key.encrypt(nonce[:], data)
-	return append(nonce, data...)
+// EncryptDataInPlace encrypts the file data in buf[NonceSize:], writes a new
+// nonce to buf[:NonceSize] and returns the nonce followed by the ciphertext,
+// the format DecryptData reads.
+//
+// If cap(buf) >= len(buf)+key.Cipher.Overhead(), the result uses buf's memory
+// and the plaintext in buf is overwritten. Otherwise the result is allocated
+// and only the nonce is written to buf. It panics if len(buf) < NonceSize.
+func (key *EncryptionKey) EncryptDataInPlace(buf []byte) []byte {
+	nonce := buf[:NonceSize]
+	copy(nonce, GenerateRandomBytes(NonceSize))
+	return key.Cipher.Seal(nonce, nonce, buf[NonceSize:], nil)
 }
 
 func (key *EncryptionKey) decrypt(nonce []byte, data []byte) error {
@@ -394,12 +398,12 @@ func (key *EncryptionKey) decrypt(nonce []byte, data []byte) error {
 // DecryptData decrypts file data using the encryption key
 // returns the decrypted data, assumes that the nonce is the first 12 bytes
 func (key *EncryptionKey) DecryptData(data []byte) ([]byte, error) {
-	nonce := data[:12]
-	err := key.decrypt(nonce, data[12:])
+	nonce := data[:NonceSize]
+	err := key.decrypt(nonce, data[NonceSize:])
 	if err != nil {
 		return nil, err
 	}
-	return data[12 : len(data)-key.Cipher.Overhead()], nil
+	return data[NonceSize : len(data)-key.Cipher.Overhead()], nil
 }
 
 func (key *EncryptionKey) ToStringWithVersion(v FileEncryptionVersion) string {

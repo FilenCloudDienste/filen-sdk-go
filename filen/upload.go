@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -35,11 +36,120 @@ func (api *Filen) NewFileUpload(file *types.IncompleteFile) *FileUpload {
 	}
 }
 
+// ErrChunkConsumed is returned by UploadChunk when the ChunkBuffer holds no
+// plaintext: it was never filled, its last Fill failed, or it was already
+// encrypted by an earlier UploadChunk.
+var ErrChunkConsumed = errors.New("chunk buffer holds no plaintext: Fill it before uploading")
+
+// ErrChunkEmpty is returned by UploadChunk when the last Fill read no data,
+// because the reader was already at io.EOF. There is no chunk to upload.
+var ErrChunkEmpty = errors.New("chunk buffer is empty: there is no chunk to upload")
+
+// ChunkBuffer holds one chunk of file data for UploadChunk, which encrypts it
+// in place so uploads don't allocate.
+//
+// Call Fill, then UploadChunk. UploadChunk overwrites the plaintext with
+// ciphertext even when the upload fails, so to retry, call Fill again with the
+// same data. The buffer can be reused for the next chunk.
+//
+// A retry loop therefore has to re-read the chunk on every attempt, for
+// example by seeking back to where the chunk starts:
+//
+//	for attempt := 0; ; attempt++ {
+//		if _, err := r.Seek(chunkStart, io.SeekStart); err != nil {
+//			return err
+//		}
+//		if _, err := b.Fill(r); err != nil {
+//			return err
+//		}
+//		if attempt == 0 {
+//			fu.Hasher.Write(b.Plaintext()) // hash each chunk only once
+//		}
+//		resp, err = api.UploadChunk(ctx, fu, chunkIndex, b)
+//		if err == nil || attempt == maxAttempts {
+//			break
+//		}
+//	}
+//
+// Create a ChunkBuffer with FileUpload.NewChunkBuffer; the zero value can't
+// be used. A ChunkBuffer is not safe for concurrent use.
+type ChunkBuffer struct {
+	buf   []byte // nonce, then the chunk, with capacity for the auth tag
+	n     int    // length of the plaintext ready to encrypt
+	ready bool   // buf holds plaintext that hasn't been encrypted
+}
+
+// NewChunkBuffer returns an empty ChunkBuffer for uploading fu's chunks.
+func (fu *FileUpload) NewChunkBuffer() *ChunkBuffer {
+	return &ChunkBuffer{
+		buf: make([]byte, crypto.NonceSize+ChunkSize, crypto.NonceSize+ChunkSize+fu.EncryptionKey.Cipher.Overhead()),
+	}
+}
+
+// Fill reads the next chunk from r, up to ChunkSize bytes or until io.EOF,
+// and returns its length. Reaching io.EOF is not an error.
+//
+// If r returns any other error, even with the last bytes of the chunk, Fill
+// returns it and the buffer holds no plaintext.
+func (b *ChunkBuffer) Fill(r io.Reader) (int, error) {
+	b.ready = false
+	// Not io.ReadFull, which can't tell a short read at io.EOF from a reader's
+	// own io.ErrUnexpectedEOF, and drops errors returned with the last bytes.
+	data := b.buf[crypto.NonceSize:]
+	n := 0
+	for n < len(data) {
+		read, err := r.Read(data[n:])
+		n += read
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return n, err
+		}
+	}
+	b.n = n
+	b.ready = true
+	return n, nil
+}
+
+// Plaintext returns the data read by the last Fill, or nil if the buffer holds
+// no plaintext because that Fill failed or UploadChunk has encrypted it.
+//
+// The slice shares the buffer's memory, so UploadChunk turns its contents into
+// ciphertext and the next Fill overwrites them. Copy it to keep the data.
+func (b *ChunkBuffer) Plaintext() []byte {
+	if !b.ready {
+		return nil
+	}
+	return b.buf[crypto.NonceSize : crypto.NonceSize+b.n]
+}
+
+// seal encrypts the plaintext in place and returns the nonce followed by the
+// ciphertext, ErrChunkConsumed if there is no plaintext ready, or ErrChunkEmpty
+// if the plaintext is empty.
+func (b *ChunkBuffer) seal(key *crypto.EncryptionKey) ([]byte, error) {
+	if !b.ready {
+		return nil, ErrChunkConsumed
+	}
+	if b.n == 0 {
+		return nil, ErrChunkEmpty
+	}
+	b.ready = false
+	return key.EncryptDataInPlace(b.buf[:crypto.NonceSize+b.n]), nil
+}
+
 // UploadChunk encrypts and uploads a single chunk of a file.
 // This function handles the encryption of the chunk before sending it to the server.
 // It returns storage details (bucket and region) for the uploaded chunk.
-func (api *Filen) UploadChunk(ctx context.Context, fu *FileUpload, chunkIndex int64, data []byte) (*client.V3UploadResponse, error) {
-	data = fu.EncryptionKey.EncryptData(data)
+//
+// The chunk is encrypted in place, consuming b's plaintext, see ChunkBuffer.
+// It returns ErrChunkConsumed if b holds no plaintext, and ErrChunkEmpty if the
+// last Fill read no data.
+func (api *Filen) UploadChunk(ctx context.Context, fu *FileUpload, chunkIndex int64, b *ChunkBuffer) (*client.V3UploadResponse, error) {
+	data, err := b.seal(&fu.EncryptionKey)
+	if err != nil {
+		return nil, err
+	}
 	response, err := api.Client.PostV3Upload(ctx, fu.UUID, chunkIndex, fu.ParentUUID, fu.UploadKey, data)
 	if err != nil {
 		return nil, fmt.Errorf("upload chunk %d: %w", chunkIndex, err)
@@ -168,7 +278,7 @@ func (api *Filen) UploadFile(ctx context.Context, file *types.IncompleteFile, r 
 	fu := api.NewFileUpload(file)
 	bucketAndRegion := make(chan client.V3UploadResponse, 1)
 
-	size, err := api.uploadFileChunks(ctx, fu, bucketAndRegion, file, r)
+	size, err := api.uploadFileChunks(ctx, fu, bucketAndRegion, r)
 	if err != nil {
 		return nil, err
 	}
@@ -176,37 +286,28 @@ func (api *Filen) UploadFile(ctx context.Context, file *types.IncompleteFile, r 
 	return api.CompleteFileUpload(ctx, fu, bucketAndRegion, size)
 }
 
-func (api *Filen) uploadFileChunks(ctx context.Context, fu *FileUpload, bucketAndRegion chan client.V3UploadResponse, file *types.IncompleteFile, r io.Reader) (int64, error) {
+func (api *Filen) uploadFileChunks(ctx context.Context, fu *FileUpload, bucketAndRegion chan client.V3UploadResponse, r io.Reader) (int64, error) {
 	size := int64(0)
+	b := fu.NewChunkBuffer()
 	for i := int64(0); ; i++ {
-		data := make([]byte, ChunkSize, ChunkSize+file.EncryptionKey.Cipher.Overhead())
-		lastChunk := false
-		for j := 0; j < ChunkSize; {
-			read, err := r.Read(data[j:])
-			if err != nil && err != io.EOF {
-				return 0, err
-			}
-			j += read
-			size += int64(read)
-			if err == io.EOF {
-				data = data[:j]
-				lastChunk = true
-				break
-			}
+		n, err := b.Fill(r)
+		if err != nil {
+			return 0, err
 		}
-
-		if len(data) > 0 {
-			fu.Hasher.Write(data)
-			resp, err := api.UploadChunk(ctx, fu, i, data)
-			if err != nil {
-				return 0, err
-			}
-			select { // only care about getting this once
-			case bucketAndRegion <- *resp:
-			default:
-			}
+		if n == 0 {
+			break
 		}
-		if lastChunk {
+		size += int64(n)
+		fu.Hasher.Write(b.Plaintext())
+		resp, err := api.UploadChunk(ctx, fu, i, b)
+		if err != nil {
+			return 0, err
+		}
+		select { // only care about getting this once
+		case bucketAndRegion <- *resp:
+		default:
+		}
+		if n < ChunkSize {
 			break
 		}
 	}
